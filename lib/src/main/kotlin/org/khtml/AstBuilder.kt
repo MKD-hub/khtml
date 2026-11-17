@@ -1,7 +1,5 @@
 package org.khtml
 
-import kotlin.reflect.typeOf
-
 interface BuilderContext {
     // class HeadingContext(val level: Int) : BuilderContext
     // class ListContext(val isOrdered: Boolean) : BuilderContext
@@ -14,7 +12,7 @@ interface BuilderContext {
     fun onEof(out: MutableList<ArticleBlock>) {}
 }
 
-class ParapgraphContext : BuilderContext {
+class ParagraphContext : BuilderContext {
     private val spans = mutableListOf<InlineSpan>()
 
     private fun flush(out: MutableList<ArticleBlock>) {
@@ -64,7 +62,7 @@ class RootContext : BuilderContext {
         return when (input) {
             is HtmlToken.TagOpen -> {
                 if (input.name == "p") {
-                    stack.addLast(ParapgraphContext())
+                    stack.addLast(ParagraphContext())
                     true
                 } else {
                     false
@@ -72,7 +70,7 @@ class RootContext : BuilderContext {
             }
 
             is HtmlToken.Text -> {
-                val p = ParapgraphContext()
+                val p = ParagraphContext()
                 stack.addLast(p)
                 p.handleToken(input, stack, out)
                 true
