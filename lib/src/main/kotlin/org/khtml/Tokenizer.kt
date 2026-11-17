@@ -9,6 +9,7 @@ data class SourcePosition(
 )
 
 sealed interface HtmlToken {
+    // this is a variable that the class itself owns
     val position: SourcePosition
 
     data class TagOpen(

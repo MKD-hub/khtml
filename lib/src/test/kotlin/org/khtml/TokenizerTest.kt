@@ -122,6 +122,20 @@ class TokenizerTest {
     }
 
     @Test
+    fun `tokenized text should contain the inline spans of paragraphs`() {
+        val tok = Tokenizer()
+        val got = tok.tokenize("<p> Hello <b> World </b> </p>")
+
+        assertIs<HtmlToken.TagOpen>(got[0]) // <p>
+        assertIs<HtmlToken.Text>(got[1]) // Hello
+        assertIs<HtmlToken.TagOpen>(got[2]) // <b>
+        assertIs<HtmlToken.Text>(got[3]) // World
+        assertIs<HtmlToken.TagClose>(got[4]) //</b>
+        assertIs<HtmlToken.Text>(got[5]) // <Space>
+        assertIs<HtmlToken.TagClose>(got[6]) // </p>
+    }
+
+    @Test
     fun `unclosed tag at EOF should be emitted as text`() {
         val tok = Tokenizer()
         val got = tok.tokenize("<p unclosed")
