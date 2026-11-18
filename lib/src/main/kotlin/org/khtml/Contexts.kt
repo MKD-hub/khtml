@@ -59,6 +59,7 @@ class RootContext : BuilderContext {
 class ParagraphContext : BuilderContext {
     private val spans = mutableListOf<InlineSpan>()
     private val activeStyles = ArrayDeque<String>()
+    private var link: String? = null
 
     private fun flush(out: MutableList<ArticleBlock>) {
         if (spans.isNotEmpty()) {
@@ -66,6 +67,7 @@ class ParagraphContext : BuilderContext {
             spans.clear()
         }
         activeStyles.clear()
+        link = null
     }
 
     override fun handleToken(
@@ -76,25 +78,36 @@ class ParagraphContext : BuilderContext {
         return when (input) {
 
             is HtmlToken.Text -> {
+                val inlineStyle = mutableSetOf<InlineStyle>()
                 // check activeStyles
                 for (style in activeStyles) {
                     when (style) {
-                        "b" -> {
-                            spans.add(
-                                InlineSpan(
-                                    text = input.content,
-                                    styles = setOf(InlineStyle.BOLD)
-                                )
-                            )
+                        "b", "strong" -> {
+                            inlineStyle.add(InlineStyle.BOLD)
+                        }
+
+                        "i", "em" -> {
+                            inlineStyle.add(InlineStyle.ITALIC)
+                        }
+
+                        "code" -> {
+                            inlineStyle.add(InlineStyle.CODE)
+                        }
+
+                        "mark" -> {
+                            inlineStyle.add(InlineStyle.HIGHLIGHT)
                         }
 
                         else -> Unit
                     }
                 }
-                if (activeStyles.isEmpty()) {
-                    // this is for unstyled text
-                    spans.add(InlineSpan(text = input.content))
-                }
+                spans.add(
+                    InlineSpan(
+                        text = input.content,
+                        styles = inlineStyle,
+                        linkUrl = link
+                    )
+                )
                 true
             }
 
@@ -111,14 +124,64 @@ class ParagraphContext : BuilderContext {
                         true
                     }
 
+                    "strong" -> {
+                        activeStyles.remove("strong")
+                        true
+                    }
+
+                    "i" -> {
+                        activeStyles.remove("i")
+                        true
+                    }
+
+                    "em" -> {
+                        activeStyles.remove("em")
+                        true
+                    }
+
+                    "code" -> {
+                        activeStyles.remove("code")
+                        true
+                    }
+
+                    "mark" -> {
+                        activeStyles.remove("mark")
+                        true
+                    }
+
+                    "a" -> {
+                        link = null
+                        true
+                    }
+
                     else -> false
                 }
             }
 
             is HtmlToken.TagOpen -> {
                 when (input.name) {
-                    "b" -> {
+                    "b", "strong" -> {
                         activeStyles.add(input.name)
+                        true
+                    }
+
+                    "i", "em" -> {
+                        activeStyles.add(input.name)
+                        true
+                    }
+
+                    "code" -> {
+                        activeStyles.add(input.name)
+                        true
+                    }
+
+                    "mark" -> {
+                        activeStyles.add(input.name)
+                        true
+                    }
+
+                    "a" -> {
+                        link = input.attributes["href"]
                         true
                     }
 

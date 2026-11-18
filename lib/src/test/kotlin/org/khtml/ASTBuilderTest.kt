@@ -87,28 +87,180 @@ class ASTBuilderTest {
         assertEquals(listOf(InlineSpan(text = " World ")), paragraph2.spans)
     }
 
+    private data class InlineTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedSpans: List<InlineSpan>
+    )
+
     @Test
-    fun `happy - return paragraph with proper inline tags`() {
-        val paragraph = listOf<HtmlToken>(
-            HtmlToken.TagOpen(name = "p", position = SourcePosition(1, 2)),
-            HtmlToken.Text(content = " Hello ", position = SourcePosition(1, 5)),
-            HtmlToken.TagOpen(name = "b", position = SourcePosition(1, 12)),
-            HtmlToken.Text(content = " World ", position = SourcePosition(1, 14)),
-            HtmlToken.TagClose(name = "b", position = SourcePosition(1, 22)),
-            HtmlToken.TagClose(name = "p", position = SourcePosition(1, 24)),
+    fun `table test - return paragraph with various inline tags`() {
+        val pos = SourcePosition(1, 1)
+
+        val testCases = listOf(
+            // 1. Bold tag
+            InlineTestCase(
+                name = "bold tag <b>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = " Hello ", position = pos),
+                    HtmlToken.TagOpen(name = "b", position = pos),
+                    HtmlToken.Text(content = " World ", position = pos),
+                    HtmlToken.TagClose(name = "b", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(text = " Hello "),
+                    InlineSpan(text = " World ", styles = setOf(InlineStyle.BOLD))
+                )
+            ),
+
+            // 2. Strong tag (maps to BOLD)
+            InlineTestCase(
+                name = "strong tag <strong>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "strong", position = pos),
+                    HtmlToken.Text(content = "Important", position = pos),
+                    HtmlToken.TagClose(name = "strong", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(text = "Important", styles = setOf(InlineStyle.BOLD))
+                )
+            ),
+
+            // 3. Italic and emphasis tags (map to ITALIC)
+            InlineTestCase(
+                name = "italic tag <i> and <em>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "i", position = pos),
+                    HtmlToken.Text(content = "Slanted", position = pos),
+                    HtmlToken.TagClose(name = "i", position = pos),
+                    HtmlToken.Text(content = " and ", position = pos),
+                    HtmlToken.TagOpen(name = "em", position = pos),
+                    HtmlToken.Text(content = "Emphasized", position = pos),
+                    HtmlToken.TagClose(name = "em", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(text = "Slanted", styles = setOf(InlineStyle.ITALIC)),
+                    InlineSpan(text = " and "),
+                    InlineSpan(text = "Emphasized", styles = setOf(InlineStyle.ITALIC))
+                )
+            ),
+
+            // 4. Monospace code tag
+            InlineTestCase(
+                name = "code tag <code>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "code", position = pos),
+                    HtmlToken.Text(content = "val x = 10", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(text = "val x = 10", styles = setOf(InlineStyle.CODE))
+                )
+            ),
+
+            // 5. Highlight mark tag
+            InlineTestCase(
+                name = "mark tag <mark>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "mark", position = pos),
+                    HtmlToken.Text(content = "Highlighted", position = pos),
+                    HtmlToken.TagClose(name = "mark", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(text = "Highlighted", styles = setOf(InlineStyle.HIGHLIGHT))
+                )
+            ),
+
+            // 6. Nested styles: bold and italic together
+            InlineTestCase(
+                name = "nested bold and italic <b><i>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "b", position = pos),
+                    HtmlToken.TagOpen(name = "i", position = pos),
+                    HtmlToken.Text(content = "Bold and Italic", position = pos),
+                    HtmlToken.TagClose(name = "i", position = pos),
+                    HtmlToken.TagClose(name = "b", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(
+                        text = "Bold and Italic",
+                        styles = setOf(InlineStyle.BOLD, InlineStyle.ITALIC)
+                    )
+                )
+            ),
+
+            // 7. Interactive link tag with URL attribute
+            InlineTestCase(
+                name = "link tag <a href>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "a",
+                        attributes = mapOf("href" to "https://example.com"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "Website", position = pos),
+                    HtmlToken.TagClose(name = "a", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(
+                        text = "Website",
+                        linkUrl = "https://example.com"
+                    )
+                )
+            ),
+
+            // 8. Styled link: bold tag wrapping a link
+            InlineTestCase(
+                name = "bold link <b><a href>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "b", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "a",
+                        attributes = mapOf("href" to "https://example.com"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "Bold Link", position = pos),
+                    HtmlToken.TagClose(name = "a", position = pos),
+                    HtmlToken.TagClose(name = "b", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(
+                        text = "Bold Link",
+                        styles = setOf(InlineStyle.BOLD),
+                        linkUrl = "https://example.com"
+                    )
+                )
+            )
         )
 
         val builder = AstBuilder()
-        val got = builder.build(paragraph)
-        val p = got[0]
-
-        assertIs<ArticleBlock.Paragraph>(p)
-        assertEquals(
-            listOf(
-                InlineSpan(text = " Hello "),
-                InlineSpan(text = " World ", styles = setOf(InlineStyle.BOLD)),
-            ), p.spans
-        )
-
+        for (case in testCases) {
+            val blocks = builder.build(case.tokens)
+            assertEquals(1, blocks.size, "Failed on '${case.name}': Expected 1 block")
+            val paragraph = blocks[0]
+            assertIs<ArticleBlock.Paragraph>(paragraph, "Failed on '${case.name}'")
+            assertEquals(case.expectedSpans, paragraph.spans, "Failed on '${case.name}'")
+        }
     }
+
+    // @Test
+    // fun `should skip unopened inline tags`() {
+    //     TODO()
+    // }
 }
