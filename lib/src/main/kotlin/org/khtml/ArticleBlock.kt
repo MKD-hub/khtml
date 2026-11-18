@@ -10,10 +10,17 @@ sealed interface ArticleBlock {
     data object Divider : ArticleBlock
 }
 
-sealed interface InlineSpan {
-    data class Text(val content: String) : InlineSpan
-    data class Bold(val content: String) : InlineSpan
-    data class Italic(val content: String) : InlineSpan
-    data class Code(val content: String) : InlineSpan
-    data class Link(val text: String, val url: String) : InlineSpan
-}
+// sealed interface InlineSpan {
+//     data class Text(val content: String) : InlineSpan
+//     data class Bold(val content: String) : InlineSpan
+//     data class Italic(val content: String) : InlineSpan
+//     data class Code(val content: String) : InlineSpan
+//     data class Link(val text: String, val url: String) : InlineSpan
+//     data class Highlight(val content: String) : InlineSpan
+// }
+
+data class InlineSpan(
+    val text: String,
+    val styles: Set<InlineStyle> = emptySet(),
+    val linkUrl: String? = null
+)
