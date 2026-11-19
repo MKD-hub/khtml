@@ -3,6 +3,7 @@ package org.khtml
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ASTBuilderTest {
@@ -555,5 +556,311 @@ class ASTBuilderTest {
         assertIs<ArticleBlock.Paragraph>(second)
         assertEquals(listOf(InlineSpan(text = "First")), first.spans)
         assertEquals(listOf(InlineSpan(text = "Second")), second.spans)
+    }
+
+    private data class HeadingTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedLevel: Int,
+        val expectedSpans: List<InlineSpan>,
+        val expectedId: String? = null
+    )
+
+    @Test
+    fun `happy - parse headings with levels correctly`() {
+        val pos = SourcePosition(1, 1)
+
+        val testCases = listOf(
+            // 1. Level 1 Heading
+            HeadingTestCase(
+                name = "h1 heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h1", position = pos),
+                    HtmlToken.Text(content = "Title", position = pos),
+                    HtmlToken.TagClose(name = "h1", position = pos)
+                ),
+                expectedLevel = 1,
+                expectedSpans = listOf(InlineSpan(text = "Title"))
+            ),
+
+            // 2. Level 2 Heading
+            HeadingTestCase(
+                name = "h2 heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h2", position = pos),
+                    HtmlToken.Text(content = "Subtitle", position = pos),
+                    HtmlToken.TagClose(name = "h2", position = pos)
+                ),
+                expectedLevel = 2,
+                expectedSpans = listOf(InlineSpan(text = "Subtitle"))
+            ),
+
+            // 3. Level 3 Heading
+            HeadingTestCase(
+                name = "h3 heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h3", position = pos),
+                    HtmlToken.Text(content = "Section", position = pos),
+                    HtmlToken.TagClose(name = "h3", position = pos)
+                ),
+                expectedLevel = 3,
+                expectedSpans = listOf(InlineSpan(text = "Section"))
+            ),
+
+            // 4. Level 4 Heading
+            HeadingTestCase(
+                name = "h4 heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h4", position = pos),
+                    HtmlToken.Text(content = "Sub-section", position = pos),
+                    HtmlToken.TagClose(name = "h4", position = pos)
+                ),
+                expectedLevel = 4,
+                expectedSpans = listOf(InlineSpan(text = "Sub-section"))
+            ),
+
+            // 5. Level 5 Heading
+            HeadingTestCase(
+                name = "h5 heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h5", position = pos),
+                    HtmlToken.Text(content = "Minor Heading", position = pos),
+                    HtmlToken.TagClose(name = "h5", position = pos)
+                ),
+                expectedLevel = 5,
+                expectedSpans = listOf(InlineSpan(text = "Minor Heading"))
+            ),
+
+            // 6. Level 6 Heading
+            HeadingTestCase(
+                name = "h6 heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h6", position = pos),
+                    HtmlToken.Text(content = "Lowest Heading", position = pos),
+                    HtmlToken.TagClose(name = "h6", position = pos)
+                ),
+                expectedLevel = 6,
+                expectedSpans = listOf(InlineSpan(text = "Lowest Heading"))
+            ),
+
+            // 7. Heading with formatted inline spans (code and bold)
+            HeadingTestCase(
+                name = "h2 with code and bold spans",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h2", position = pos),
+                    HtmlToken.Text(content = "The ", position = pos),
+                    HtmlToken.TagOpen(name = "code", position = pos),
+                    HtmlToken.Text(content = "Result", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.Text(content = " Type in ", position = pos),
+                    HtmlToken.TagOpen(name = "b", position = pos),
+                    HtmlToken.Text(content = "Kotlin", position = pos),
+                    HtmlToken.TagClose(name = "b", position = pos),
+                    HtmlToken.TagClose(name = "h2", position = pos)
+                ),
+                expectedLevel = 2,
+                expectedSpans = listOf(
+                    InlineSpan(text = "The "),
+                    InlineSpan(text = "Result", styles = setOf(InlineStyle.CODE)),
+                    InlineSpan(text = " Type in "),
+                    InlineSpan(text = "Kotlin", styles = setOf(InlineStyle.BOLD))
+                )
+            ),
+
+            // 8. Heading containing a link
+            HeadingTestCase(
+                name = "h3 with link",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h3", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "a",
+                        attributes = mapOf("href" to "https://example.com/docs"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "Documentation", position = pos),
+                    HtmlToken.TagClose(name = "a", position = pos),
+                    HtmlToken.TagClose(name = "h3", position = pos)
+                ),
+                expectedLevel = 3,
+                expectedSpans = listOf(
+                    InlineSpan(text = "Documentation", linkUrl = "https://example.com/docs")
+                )
+            )
+        )
+
+        val builder = AstBuilder()
+        for ((name, tokens, expectedLevel, expectedSpans, expectedId) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(1, blocks.size, "Failed on '$name': Expected 1 block")
+            val heading = blocks[0]
+            assertIs<ArticleBlock.Heading>(heading, "Failed on '$name': Expected Heading block")
+            assertEquals(expectedLevel, heading.level, "Failed on '$name': Level mismatch")
+            assertEquals(expectedSpans, heading.spans, "Failed on '$name': Spans mismatch")
+            assertEquals(expectedId, heading.id, "Failed on '$name': Id mismatch")
+        }
+    }
+
+    private data class HeadingSadTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedBlocks: List<ArticleBlock>
+    )
+
+    @Test
+    fun `sad path - headings edge cases and recovery`() {
+        val pos = SourcePosition(1, 1)
+
+        val testCases = listOf(
+            // 1. Invalid heading level <h7> falls back to paragraph
+            HeadingSadTestCase(
+                name = "invalid heading <h7> becomes paragraph",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h7", position = pos),
+                    HtmlToken.Text(content = "Not a real heading", position = pos),
+                    HtmlToken.TagClose(name = "h7", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "Not a real heading")))
+                )
+            ),
+
+            // 2. Invalid heading level <h0> falls back to paragraph
+            HeadingSadTestCase(
+                name = "invalid heading <h0> becomes paragraph",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h0", position = pos),
+                    HtmlToken.Text(content = "Zero level", position = pos),
+                    HtmlToken.TagClose(name = "h0", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "Zero level")))
+                )
+            ),
+
+            // 3. Unclosed heading at EOF flushes safely
+            HeadingSadTestCase(
+                name = "unclosed heading at EOF flushes",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h1", position = pos),
+                    HtmlToken.Text(content = "Never Closed Title", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Heading(
+                        level = 1,
+                        spans = listOf(InlineSpan(text = "Never Closed Title"))
+                    )
+                )
+            ),
+
+            // 4. Stray closing </h1> without opening tag
+            HeadingSadTestCase(
+                name = "stray closing </h1> without opening tag",
+                tokens = listOf(
+                    HtmlToken.Text(content = "Orphaned text", position = pos),
+                    HtmlToken.TagClose(name = "h1", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "Orphaned text")))
+                )
+            ),
+
+            // 5. Mismatched closing tag <h2> closed by </h3>
+            HeadingSadTestCase(
+                name = "mismatched closing tag closes active heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h2", position = pos),
+                    HtmlToken.Text(content = "Mismatched", position = pos),
+                    HtmlToken.TagClose(name = "h3", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Heading(
+                        level = 2,
+                        spans = listOf(InlineSpan(text = "Mismatched"))
+                    )
+                )
+            ),
+
+            // 6. Unclosed heading interrupted by a paragraph
+            HeadingSadTestCase(
+                name = "unclosed heading interrupted by paragraph",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h2", position = pos),
+                    HtmlToken.Text(content = "Heading Title", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Paragraph Body", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Heading(
+                        level = 2,
+                        spans = listOf(InlineSpan(text = "Heading Title"))
+                    ),
+                    ArticleBlock.Paragraph(
+                        spans = listOf(InlineSpan(text = "Paragraph Body"))
+                    )
+                )
+            ),
+
+            // 7. Unclosed heading interrupted by another heading
+            HeadingSadTestCase(
+                name = "unclosed heading interrupted by another heading",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h1", position = pos),
+                    HtmlToken.Text(content = "First Heading", position = pos),
+                    HtmlToken.TagOpen(name = "h2", position = pos),
+                    HtmlToken.Text(content = "Second Heading", position = pos),
+                    HtmlToken.TagClose(name = "h2", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Heading(
+                        level = 1,
+                        spans = listOf(InlineSpan(text = "First Heading"))
+                    ),
+                    ArticleBlock.Heading(
+                        level = 2,
+                        spans = listOf(InlineSpan(text = "Second Heading"))
+                    )
+                )
+            ),
+
+            // 8. Empty heading tag is discarded
+            HeadingSadTestCase(
+                name = "empty heading is discarded",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "h1", position = pos),
+                    HtmlToken.TagClose(name = "h1", position = pos)
+                ),
+                expectedBlocks = emptyList()
+            ),
+
+            // 9. Stray unopened heading tag inside paragraph does not corrupt active bold style
+            HeadingSadTestCase(
+                name = "stray </h3> inside paragraph does not corrupt bold style",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "b", position = pos),
+                    HtmlToken.Text(content = "Bold", position = pos),
+                    HtmlToken.TagClose(name = "h3", position = pos),
+                    HtmlToken.Text(content = " Text", position = pos),
+                    HtmlToken.TagClose(name = "b", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(
+                        spans = listOf(
+                            InlineSpan(text = "Bold", styles = setOf(InlineStyle.BOLD)),
+                            InlineSpan(text = " Text", styles = setOf(InlineStyle.BOLD))
+                        )
+                    )
+                )
+            )
+        )
+
+        val builder = AstBuilder()
+        for ((name, tokens, expectedBlocks) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
+            assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
+        }
     }
 }
