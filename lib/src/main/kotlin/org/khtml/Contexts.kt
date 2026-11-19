@@ -33,6 +33,11 @@ class RootContext : BuilderContext {
     ): Boolean {
         return when (input) {
             is HtmlToken.TagOpen -> {
+                if (input.name in HtmlTags.INLINE) {
+                    val p = ParagraphContext()
+                    stack.addLast(p)
+                    p.handleToken(input, stack, out)
+                }
                 if (input.name == "p") {
                     stack.addLast(ParagraphContext())
                     true
@@ -185,7 +190,11 @@ class ParagraphContext : BuilderContext {
                         true
                     }
 
-                    else -> false
+                    else -> {
+                        flush(out)
+                        stack.removeLast()
+                        stack.last().handleToken(input, stack, out)
+                    }
                 }
             }
         }
