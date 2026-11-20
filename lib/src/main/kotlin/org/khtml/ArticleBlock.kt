@@ -10,7 +10,8 @@ sealed interface ArticleBlock {
     data class Paragraph(val spans: List<InlineSpan>) : ArticleBlock
     data class Blockquote(val spans: List<InlineSpan>) : ArticleBlock
     data class CodeBlock(val code: String, val language: String? = null) : ArticleBlock
-    data class ListItem(val spans: List<InlineSpan>, val isOrdered: Boolean, val index: Int) : ArticleBlock
+    data class ListItem(val spans: List<InlineSpan>, val index: Int) : ArticleBlock
+    data class HtmlList(val items: List<ListItem>, val isOrdered: Boolean) : ArticleBlock
     data class ImageBlock(val src: String, val alt: String? = null) : ArticleBlock
     data object Divider : ArticleBlock
 }
