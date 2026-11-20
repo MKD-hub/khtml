@@ -48,6 +48,12 @@ class RootContext : BuilderContext {
                         true
                     }
 
+                    "ol", "ul" -> {
+                        val ordered = input.name == "ol"
+                        stack.addLast(ListContext(ordered))
+                        true
+                    }
+
                     in HtmlTags.HEADINGS -> {
                         val headingLevel = input.name.drop(1).toInt()
                         stack.addLast(HeadingContext(headingLevel))
@@ -358,5 +364,126 @@ class HeadingContext(val level: Int) : BuilderContext {
 
     override fun onEof(out: MutableList<ArticleBlock>) {
         flush(out)
+    }
+}
+
+class ListContext(val isOrdered: Boolean) : BuilderContext {
+    private val spans = mutableListOf<InlineSpan>()
+    private val listItems = mutableListOf<ArticleBlock.ListItem>()
+    private var index = 0
+
+    private fun flush(out: MutableList<ArticleBlock>) {
+        if (listItems.isNotEmpty()) {
+            out.add(ArticleBlock.HtmlList(items = listItems.toList(), isOrdered = isOrdered))
+            listItems.clear()
+        }
+    }
+
+    override fun handleToken(
+        input: HtmlToken,
+        stack: ArrayDeque<BuilderContext>,
+        out: MutableList<ArticleBlock>
+    ): Boolean {
+        return when (input) {
+            is HtmlToken.Text -> {
+                spans.add(
+                    InlineSpan(
+                        text = input.content
+                    )
+                )
+                true
+            }
+
+            is HtmlToken.TagOpen -> {
+                when (input.name) {
+                    "li" -> {
+                        val l = ListItemContext(listItems, ++index)
+                        stack.addLast(l)
+                        l.handleToken(input, stack, out)
+                    }
+
+                    else -> false
+                }
+            }
+
+            is HtmlToken.TagClose -> {
+                when (input.name) {
+                    "ol", "ul" -> {
+                        flush(out)
+                        stack.removeLast()
+                        true
+                    }
+
+                    else -> false
+                    // else -> {
+                    //     flush(out)
+                    //     stack.removeLast()
+                    //     stack.last().handleToken(input, stack, out)
+                    // }
+                }
+            }
+
+
+        }
+    }
+
+
+    override fun onEof(out: MutableList<ArticleBlock>) {
+        flush(out)
+    }
+}
+
+class ListItemContext(
+    val items: MutableList<ArticleBlock.ListItem>,
+    val index: Int
+) : BuilderContext {
+    private val spans: MutableList<InlineSpan> = mutableListOf<InlineSpan>()
+
+    private fun flush(out: MutableList<ArticleBlock.ListItem>) {
+        if (spans.isNotEmpty()) {
+            out.add(ArticleBlock.ListItem(spans = spans.toList(), index = index))
+            spans.clear()
+        }
+    }
+
+    override fun handleToken(
+        input: HtmlToken,
+        stack: ArrayDeque<BuilderContext>,
+        out: MutableList<ArticleBlock>
+    ): Boolean {
+        return when (input) {
+            // is HtmlToken.TagOpen -> {
+            //     TODO()
+            // }
+
+            is HtmlToken.Text -> {
+                spans.add(
+                    InlineSpan(text = input.content)
+                )
+                true
+            }
+
+            is HtmlToken.TagClose -> {
+                when (input.name) {
+                    "li" -> {
+                        flush(items)
+                        stack.removeLast()
+                        true
+                    }
+
+                    else -> {
+                        flush(items)
+                        stack.removeLast()
+                        stack.last().handleToken(input, stack, out)
+                    }
+                }
+            }
+
+            else -> true
+        }
+    }
+
+    override fun onEof(out: MutableList<ArticleBlock>) {
+        flush(items)
     }
 }
