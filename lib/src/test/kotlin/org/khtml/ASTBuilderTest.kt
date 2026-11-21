@@ -1032,6 +1032,93 @@ class ASTBuilderTest {
                         )
                     )
                 )
+            ),
+
+            // 5. Nested list inside list item
+            ListTestCase(
+                name = "nested list inside list item",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Parent item", position = pos),
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Sub item 1", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Sub item 2", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Second parent item", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Parent item")),
+                                index = 1,
+                                children = listOf(
+                                    ArticleBlock.HtmlList(
+                                        isOrdered = false,
+                                        items = listOf(
+                                            ArticleBlock.ListItem(
+                                                spans = listOf(InlineSpan(text = "Sub item 1")),
+                                                index = 1
+                                            ),
+                                            ArticleBlock.ListItem(
+                                                spans = listOf(InlineSpan(text = "Sub item 2")),
+                                                index = 2
+                                            )
+                                        )
+                                    )
+                                )
+                            ),
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Second parent item")),
+                                index = 2
+                            )
+                        )
+                    )
+                )
+            ),
+
+            // 6. List items wrapping text in paragraph tags
+            ListTestCase(
+                name = "list items with paragraph tags",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Paragraph item 1", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Paragraph item 2", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Paragraph item 1")),
+                                index = 1
+                            ),
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Paragraph item 2")),
+                                index = 2
+                            )
+                        )
+                    )
+                )
             )
         )
 
@@ -1041,6 +1128,140 @@ class ASTBuilderTest {
             assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
             assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
         }
+    }
 
+    @Test
+    fun `sad path - list edge cases and recovery`() {
+        val pos = SourcePosition(1, 1)
+
+        val testCases = listOf(
+            // 1. Stray text directly inside list is preserved as a list item
+            ListTestCase(
+                name = "stray text directly inside list is preserved as list item",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.Text(content = "Stray text", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Normal item", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Stray text")),
+                                index = 1
+                            ),
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Normal item")),
+                                index = 2
+                            )
+                        )
+                    )
+                )
+            ),
+
+            // 2. Whitespace indentation between tags is ignored
+            ListTestCase(
+                name = "whitespace between list tags is ignored",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.Text(content = "\n  \t  ", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Item", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.Text(content = "\n", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Item")),
+                                index = 1
+                            )
+                        )
+                    )
+                )
+            ),
+
+            // 3. Orphaned li tag at root level degrades to paragraph
+            ListTestCase(
+                name = "orphaned li at root level degrades to paragraph",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Orphan item", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(
+                        spans = listOf(InlineSpan(text = "Orphan item"))
+                    )
+                )
+            ),
+
+            // 4. Unclosed paragraph inside list item
+            ListTestCase(
+                name = "unclosed paragraph inside list item",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Unclosed paragraph item", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Unclosed paragraph item")),
+                                index = 1
+                            )
+                        )
+                    )
+                )
+            ),
+
+            // 5. Paragraph followed by text in same list item
+            ListTestCase(
+                name = "paragraph followed by text inside same list item",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Hello", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos),
+                    HtmlToken.Text(content = " World", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(
+                                    InlineSpan(text = "Hello"),
+                                    InlineSpan(text = " World")
+                                ),
+                                index = 1
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val builder = AstBuilder()
+        for ((name, tokens, expectedBlocks) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
+            assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
+        }
     }
 }

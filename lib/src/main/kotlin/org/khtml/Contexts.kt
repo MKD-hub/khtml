@@ -55,8 +55,14 @@ class RootContext : BuilderContext {
                     }
 
                     "ol", "ul" -> {
-                        val ordered = input.name == "ol"
-                        stack.addLast(ListContext(ordered))
+                        val isOrdered = input.name == "ol"
+                        stack.addLast(ListContext(isOrdered, out))
+                        TokenResult.HANDLED
+                    }
+
+                    "li" -> {
+                        val p = ParagraphContext()
+                        stack.addLast(p)
                         TokenResult.HANDLED
                     }
 
@@ -372,17 +378,13 @@ class HeadingContext(val level: Int) : BuilderContext {
     }
 }
 
-class ListContext(val isOrdered: Boolean) : BuilderContext {
-    private val spans = mutableListOf<InlineSpan>()
+class ListContext(val isOrdered: Boolean, val targetOut: MutableList<ArticleBlock>) : BuilderContext {
     private val listItems = mutableListOf<ArticleBlock.ListItem>()
     private var index = 0
 
-    // private fun nextIndex(): Int = ++index
-    // private fun getIndex(): Int = index
-
-    private fun flush(out: MutableList<ArticleBlock>) {
+    private fun flush() {
         if (listItems.isNotEmpty()) {
-            out.add(ArticleBlock.HtmlList(items = listItems.toList(), isOrdered = isOrdered))
+            targetOut.add(ArticleBlock.HtmlList(items = listItems.toList(), isOrdered = isOrdered))
             listItems.clear()
         }
     }
@@ -394,12 +396,13 @@ class ListContext(val isOrdered: Boolean) : BuilderContext {
     ): TokenResult {
         return when (input) {
             is HtmlToken.Text -> {
-                spans.add(
-                    InlineSpan(
-                        text = input.content
-                    )
-                )
-                TokenResult.HANDLED
+                if (input.content.isBlank()) {
+                    TokenResult.SKIPPED
+                } else {
+                    val l = ListItemContext(listItems, ++index)
+                    stack.addLast(l)
+                    l.handleToken(input, stack, out)
+                }
             }
 
             is HtmlToken.TagOpen -> {
@@ -417,7 +420,7 @@ class ListContext(val isOrdered: Boolean) : BuilderContext {
             is HtmlToken.TagClose -> {
                 when (input.name) {
                     "ol", "ul" -> {
-                        flush(out)
+                        flush()
                         stack.removeLast()
                         TokenResult.HANDLED
                     }
@@ -437,7 +440,7 @@ class ListContext(val isOrdered: Boolean) : BuilderContext {
 
 
     override fun onEof(out: MutableList<ArticleBlock>) {
-        flush(out)
+        flush()
     }
 }
 
@@ -449,9 +452,12 @@ class ListItemContext(
     private val activeStyles: MutableList<String> = mutableListOf<String>()
     private var link: String? = null
 
+    // for recursive lists
+    private val listItemBlocks = mutableListOf<ArticleBlock>()
+
     private fun flush(out: MutableList<ArticleBlock.ListItem>) {
         if (spans.isNotEmpty()) {
-            out.add(ArticleBlock.ListItem(spans = spans.toList(), index = index))
+            out.add(ArticleBlock.ListItem(spans = spans.toList(), index = index, children = listItemBlocks.toList()))
             spans.clear()
             activeStyles.clear()
             link = null
@@ -471,6 +477,10 @@ class ListItemContext(
                         flush(items)
                         stack.removeLast()
                         stack.last().handleToken(input, stack, out)
+                    }
+
+                    "p" -> {
+                        TokenResult.SKIPPED
                     }
 
                     "b", "strong" -> {
@@ -495,6 +505,12 @@ class ListItemContext(
 
                     "a" -> {
                         link = input.attributes["href"]
+                        TokenResult.HANDLED
+                    }
+
+                    "ol", "ul" -> {
+                        val isOrdered = input.name == "ol"
+                        stack.addLast(ListContext(isOrdered, targetOut = listItemBlocks))
                         TokenResult.HANDLED
                     }
 
@@ -546,6 +562,10 @@ class ListItemContext(
                     "b" -> {
                         activeStyles.remove("b")
                         TokenResult.HANDLED
+                    }
+
+                    "p" -> {
+                        TokenResult.SKIPPED
                     }
 
                     "strong" -> {
