@@ -931,6 +931,84 @@ class ASTBuilderTest {
                         )
                     )
                 )
+            ),
+
+            // 3. Basic unordered list (ul) with items
+            ListTestCase(
+                name = "basic unordered list with two items",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Apples", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Oranges", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Apples")),
+                                index = 1
+                            ),
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Oranges")),
+                                index = 2
+                            )
+                        )
+                    )
+                )
+            ),
+
+            // 4. List items with inline formatted tags
+            ListTestCase(
+                name = "list items with inline formatted tags",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Plain ", position = pos),
+                    HtmlToken.TagOpen(name = "b", position = pos),
+                    HtmlToken.Text(content = "Bold", position = pos),
+                    HtmlToken.TagClose(name = "b", position = pos),
+                    HtmlToken.Text(content = " and More", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "i", position = pos),
+                    HtmlToken.Text(content = "Italic", position = pos),
+                    HtmlToken.TagClose(name = "i", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(
+                                    InlineSpan(text = "Plain "),
+                                    InlineSpan(
+                                        text = "Bold",
+                                        styles = setOf(InlineStyle.BOLD)
+                                    ),
+                                    InlineSpan(text = " and More")
+                                ),
+                                index = 1
+                            ),
+                            ArticleBlock.ListItem(
+                                spans = listOf(
+                                    InlineSpan(
+                                        text = "Italic",
+                                        styles = setOf(InlineStyle.ITALIC)
+                                    )
+                                ),
+                                index = 2
+                            )
+                        )
+                    )
+                )
             )
         )
 
@@ -939,9 +1017,6 @@ class ASTBuilderTest {
             val blocks = builder.build(tokens)
             assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
             assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
-            println("Expected Blocks: $expectedBlocks")
-            println("\n")
-            println("Actual Blocks: $blocks")
         }
 
     }

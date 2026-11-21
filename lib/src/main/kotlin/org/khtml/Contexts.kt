@@ -443,11 +443,15 @@ class ListItemContext(
     val index: Int
 ) : BuilderContext {
     private val spans: MutableList<InlineSpan> = mutableListOf<InlineSpan>()
+    private val activeStyles: MutableList<String> = mutableListOf<String>()
+    private var link: String? = null
 
     private fun flush(out: MutableList<ArticleBlock.ListItem>) {
         if (spans.isNotEmpty()) {
             out.add(ArticleBlock.ListItem(spans = spans.toList(), index = index))
             spans.clear()
+            activeStyles.clear()
+            link = null
         }
     }
 
@@ -466,13 +470,64 @@ class ListItemContext(
                         stack.last().handleToken(input, stack, out)
                     }
 
+                    "b", "strong" -> {
+                        activeStyles.add(input.name)
+                        TOKEN_HANDLED
+                    }
+
+                    "i", "em" -> {
+                        activeStyles.add(input.name)
+                        TOKEN_HANDLED
+                    }
+
+                    "code" -> {
+                        activeStyles.add(input.name)
+                        TOKEN_HANDLED
+                    }
+
+                    "mark" -> {
+                        activeStyles.add(input.name)
+                        TOKEN_HANDLED
+                    }
+
+                    "a" -> {
+                        link = input.attributes["href"]
+                        TOKEN_HANDLED
+                    }
+
                     else -> TOKEN_UNHANDLED
                 }
             }
 
             is HtmlToken.Text -> {
+                val inlineStyle = mutableSetOf<InlineStyle>()
+                for (style in activeStyles) {
+                    when (style) {
+                        "b", "strong" -> {
+                            inlineStyle.add(InlineStyle.BOLD)
+                        }
+
+                        "i", "em" -> {
+                            inlineStyle.add(InlineStyle.ITALIC)
+                        }
+
+                        "code" -> {
+                            inlineStyle.add(InlineStyle.CODE)
+                        }
+
+                        "mark" -> {
+                            inlineStyle.add(InlineStyle.HIGHLIGHT)
+                        }
+
+                        else -> Unit
+                    }
+                }
                 spans.add(
-                    InlineSpan(text = input.content)
+                    InlineSpan(
+                        text = input.content,
+                        styles = inlineStyle,
+                        linkUrl = link
+                    )
                 )
                 TOKEN_HANDLED
             }
@@ -482,6 +537,41 @@ class ListItemContext(
                     "li" -> {
                         flush(items)
                         stack.removeLast()
+                        TOKEN_HANDLED
+                    }
+
+                    "b" -> {
+                        activeStyles.remove("b")
+                        TOKEN_HANDLED
+                    }
+
+                    "strong" -> {
+                        activeStyles.remove("strong")
+                        TOKEN_HANDLED
+                    }
+
+                    "i" -> {
+                        activeStyles.remove("i")
+                        TOKEN_HANDLED
+                    }
+
+                    "em" -> {
+                        activeStyles.remove("em")
+                        TOKEN_HANDLED
+                    }
+
+                    "code" -> {
+                        activeStyles.remove("code")
+                        TOKEN_HANDLED
+                    }
+
+                    "mark" -> {
+                        activeStyles.remove("mark")
+                        TOKEN_HANDLED
+                    }
+
+                    "a" -> {
+                        link = null
                         TOKEN_HANDLED
                     }
 
