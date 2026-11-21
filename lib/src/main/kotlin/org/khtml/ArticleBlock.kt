@@ -14,6 +14,7 @@ sealed interface ArticleBlock {
     data class HtmlList(val items: List<ListItem>, val isOrdered: Boolean) : ArticleBlock
     data class ImageBlock(val src: String, val alt: String? = null) : ArticleBlock
     data object Divider : ArticleBlock
+    data object LineBreak : ArticleBlock
 }
 
 data class InlineSpan(

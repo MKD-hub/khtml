@@ -1,5 +1,6 @@
 package org.khtml
 
+private const val TOKEN_SKIPPED = true
 private const val TOKEN_HANDLED = true
 private const val TOKEN_UNHANDLED = false
 
@@ -69,14 +70,14 @@ class RootContext : BuilderContext {
 
             is HtmlToken.Text -> {
                 if (input.content.isBlank()) {
-                    return TOKEN_HANDLED
+                    return TOKEN_SKIPPED
                 }
                 val p = ParagraphContext()
                 stack.addLast(p)
                 p.handleToken(input, stack, out) // returns its own TOKEN_HANDLED/UNHANDLED
             }
 
-            else -> false
+            else -> TOKEN_UNHANDLED
         }
     }
 }
@@ -87,7 +88,7 @@ class ParagraphContext : BuilderContext {
     private var link: String? = null
 
     private fun flush(out: MutableList<ArticleBlock>) {
-        if (spans.isNotEmpty()) {
+        if (spans.any { it.text.isNotBlank() }) {
             out.add(ArticleBlock.Paragraph(spans.toList()))
             spans.clear()
         }

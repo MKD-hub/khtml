@@ -88,6 +88,29 @@ class ASTBuilderTest {
         assertEquals(listOf(InlineSpan(text = " World ")), paragraph2.spans)
     }
 
+    @Test
+    fun `empty or whitespace-only paragraph should be discarded`() {
+        val pos = SourcePosition(1, 1)
+        val builder = AstBuilder()
+
+        // 1. Completely empty paragraph: <p></p>
+        val emptyTokens = listOf(
+            HtmlToken.TagOpen(name = "p", position = pos),
+            HtmlToken.TagClose(name = "p", position = pos)
+        )
+        val emptyResult = builder.build(emptyTokens)
+        assertTrue(emptyResult.isEmpty(), "Expected empty paragraph to be discarded")
+
+        // 2. Whitespace-only paragraph: <p>   \n\t  </p>
+        val whitespaceTokens = listOf(
+            HtmlToken.TagOpen(name = "p", position = pos),
+            HtmlToken.Text(content = "   \n\t  ", position = pos),
+            HtmlToken.TagClose(name = "p", position = pos)
+        )
+        val whitespaceResult = builder.build(whitespaceTokens)
+        assertTrue(whitespaceResult.isEmpty(), "Expected whitespace-only paragraph to be discarded")
+    }
+
     private data class InlineTestCase(
         val name: String,
         val tokens: List<HtmlToken>,
@@ -368,12 +391,12 @@ class ASTBuilderTest {
         )
 
         val builder = AstBuilder()
-        for (case in testCases) {
-            val blocks = builder.build(case.tokens)
-            assertEquals(1, blocks.size, "Failed on '${case.name}': Expected 1 block")
+        for ((name, tokens, expectedSpans) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(1, blocks.size, "Failed on '${name}': Expected 1 block")
             val paragraph = blocks[0]
-            assertIs<ArticleBlock.Paragraph>(paragraph, "Failed on '${case.name}'")
-            assertEquals(case.expectedSpans, paragraph.spans, "Failed on '${case.name}'")
+            assertIs<ArticleBlock.Paragraph>(paragraph, "Failed on '${name}'")
+            assertEquals(expectedSpans, paragraph.spans, "Failed on '${name}'")
         }
     }
 
