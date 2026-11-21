@@ -864,45 +864,85 @@ class ASTBuilderTest {
         }
     }
 
+    private data class ListTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedBlocks: List<ArticleBlock>
+    )
+
     @Test
-    fun `happy - basic list test`() {
+    fun `happy - list table tests`() {
         val pos = SourcePosition(1, 1)
-        val tokens = listOf(
-            HtmlToken.TagOpen(name = "ol", position = pos),
-            HtmlToken.TagOpen(name = "li", position = pos),
-            HtmlToken.Text(content = "Bread", position = pos),
-            HtmlToken.TagClose(name = "li", position = pos),
-            HtmlToken.TagOpen(name = "li", position = pos),
-            HtmlToken.Text(content = "Coffee", position = pos),
-            HtmlToken.TagClose(name = "li", position = pos),
-            HtmlToken.TagClose(name = "ol", position = pos)
+
+        val testCases = listOf(
+            // 1. Basic ordered list with explicit closing tags
+            ListTestCase(
+                name = "basic ordered list with two items and explicit closing tags",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ol", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Bread", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Coffee", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ol", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = true,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Bread")),
+                                index = 1
+                            ),
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Coffee")),
+                                index = 2
+                            )
+                        )
+                    )
+                )
+            ),
+
+            // 2. Auto-closing consecutive <li> items without </li> tags
+            ListTestCase(
+                name = "auto-closing consecutive li items without closing tag",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ol", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Bread", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Coffee", position = pos),
+                    HtmlToken.TagClose(name = "ol", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = true,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Bread")),
+                                index = 1
+                            ),
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Coffee")),
+                                index = 2
+                            )
+                        )
+                    )
+                )
+            )
         )
+
         val builder = AstBuilder()
-        val got = builder.build(tokens)
+        for ((name, tokens, expectedBlocks) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
+            assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
+            println("Expected Blocks: $expectedBlocks")
+            println("\n")
+            println("Actual Blocks: $blocks")
+        }
 
-        assertTrue(got.isNotEmpty(), "expected non-empty array from builder")
-
-        val list = got[0]
-
-        assertIs<ArticleBlock.HtmlList>(list)
-
-        assertTrue(list.items.isNotEmpty(), "expected non-empty list items")
-        assertEquals(2, list.items.size)
-        assertIs<List<ArticleBlock.ListItem>>(list.items)
-
-        val spans = list.items[0].spans
-        val spans2 = list.items[1].spans
-
-        assertTrue(spans.isNotEmpty(), "expected non-empty spans")
-        assertTrue(spans2.isNotEmpty(), "expected non-empty spans")
-
-        assertEquals(1, list.items[0].index)
-        assertEquals(2, list.items[1].index)
-        assertIs<List<InlineSpan>>(spans)
-
-        val first = spans[0]
-        val second = spans2[0]
-        assertEquals("Bread", first.text, "expected 'Bread' but got '$first.text' instead")
-        assertEquals("Coffee", second.text, "expected 'Coffee' but got '$second.text' instead")
     }
 }

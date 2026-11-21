@@ -1,5 +1,8 @@
 package org.khtml
 
+private const val TOKEN_HANDLED = true
+private const val TOKEN_UNHANDLED = false
+
 internal object HtmlTags {
     val INLINE = setOf(
         "b", "strong", "i", "em", "a", "code",
@@ -45,33 +48,32 @@ class RootContext : BuilderContext {
                 when (input.name) {
                     "p" -> {
                         stack.addLast(ParagraphContext())
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "ol", "ul" -> {
                         val ordered = input.name == "ol"
                         stack.addLast(ListContext(ordered))
-                        true
+                        TOKEN_HANDLED
                     }
 
                     in HtmlTags.HEADINGS -> {
                         val headingLevel = input.name.drop(1).toInt()
                         stack.addLast(HeadingContext(headingLevel))
-                        true
+                        TOKEN_HANDLED
                     }
 
-                    else -> false
+                    else -> TOKEN_UNHANDLED
                 }
             }
 
             is HtmlToken.Text -> {
                 if (input.content.isBlank()) {
-                    return true
+                    return TOKEN_HANDLED
                 }
                 val p = ParagraphContext()
                 stack.addLast(p)
-                p.handleToken(input, stack, out)
-                true
+                p.handleToken(input, stack, out) // returns its own TOKEN_HANDLED/UNHANDLED
             }
 
             else -> false
@@ -131,7 +133,7 @@ class ParagraphContext : BuilderContext {
                         linkUrl = link
                     )
                 )
-                true
+                TOKEN_HANDLED
             }
 
             is HtmlToken.TagClose -> {
@@ -139,45 +141,45 @@ class ParagraphContext : BuilderContext {
                     "p" -> {
                         flush(out)
                         stack.removeLast()
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "b" -> {
                         activeStyles.remove("b")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "strong" -> {
                         activeStyles.remove("strong")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "i" -> {
                         activeStyles.remove("i")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "em" -> {
                         activeStyles.remove("em")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "code" -> {
                         activeStyles.remove("code")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "mark" -> {
                         activeStyles.remove("mark")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "a" -> {
                         link = null
-                        true
+                        TOKEN_HANDLED
                     }
 
-                    else -> false
+                    else -> TOKEN_UNHANDLED
                 }
             }
 
@@ -185,27 +187,27 @@ class ParagraphContext : BuilderContext {
                 when (input.name) {
                     "b", "strong" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "i", "em" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "code" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "mark" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "a" -> {
                         link = input.attributes["href"]
-                        true
+                        TOKEN_HANDLED
                     }
 
                     else -> {
@@ -275,7 +277,7 @@ class HeadingContext(val level: Int) : BuilderContext {
                         linkUrl = link
                     )
                 )
-                true
+                TOKEN_HANDLED
             }
 
             is HtmlToken.TagClose -> {
@@ -283,45 +285,45 @@ class HeadingContext(val level: Int) : BuilderContext {
                     in HtmlTags.HEADINGS -> {
                         flush(out)
                         stack.removeLast()
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "b" -> {
                         activeStyles.remove("b")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "strong" -> {
                         activeStyles.remove("strong")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "i" -> {
                         activeStyles.remove("i")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "em" -> {
                         activeStyles.remove("em")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "code" -> {
                         activeStyles.remove("code")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "mark" -> {
                         activeStyles.remove("mark")
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "a" -> {
                         link = null
-                        true
+                        TOKEN_HANDLED
                     }
 
-                    else -> false
+                    else -> TOKEN_UNHANDLED
                 }
             }
 
@@ -329,27 +331,27 @@ class HeadingContext(val level: Int) : BuilderContext {
                 when (input.name) {
                     "b", "strong" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "i", "em" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "code" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "mark" -> {
                         activeStyles.add(input.name)
-                        true
+                        TOKEN_HANDLED
                     }
 
                     "a" -> {
                         link = input.attributes["href"]
-                        true
+                        TOKEN_HANDLED
                     }
 
                     else -> {
@@ -372,6 +374,9 @@ class ListContext(val isOrdered: Boolean) : BuilderContext {
     private val listItems = mutableListOf<ArticleBlock.ListItem>()
     private var index = 0
 
+    // private fun nextIndex(): Int = ++index
+    // private fun getIndex(): Int = index
+
     private fun flush(out: MutableList<ArticleBlock>) {
         if (listItems.isNotEmpty()) {
             out.add(ArticleBlock.HtmlList(items = listItems.toList(), isOrdered = isOrdered))
@@ -391,7 +396,7 @@ class ListContext(val isOrdered: Boolean) : BuilderContext {
                         text = input.content
                     )
                 )
-                true
+                TOKEN_HANDLED
             }
 
             is HtmlToken.TagOpen -> {
@@ -399,10 +404,10 @@ class ListContext(val isOrdered: Boolean) : BuilderContext {
                     "li" -> {
                         val l = ListItemContext(listItems, ++index)
                         stack.addLast(l)
-                        l.handleToken(input, stack, out)
+                        TOKEN_HANDLED
                     }
 
-                    else -> false
+                    else -> TOKEN_UNHANDLED
                 }
             }
 
@@ -411,10 +416,10 @@ class ListContext(val isOrdered: Boolean) : BuilderContext {
                     "ol", "ul" -> {
                         flush(out)
                         stack.removeLast()
-                        true
+                        TOKEN_HANDLED
                     }
 
-                    else -> false
+                    else -> TOKEN_UNHANDLED
                     // else -> {
                     //     flush(out)
                     //     stack.removeLast()
@@ -452,15 +457,24 @@ class ListItemContext(
         out: MutableList<ArticleBlock>
     ): Boolean {
         return when (input) {
-            // is HtmlToken.TagOpen -> {
-            //     TODO()
-            // }
+            is HtmlToken.TagOpen -> {
+                // in cases where we have: <li> [first] <li> [second]
+                when (input.name) {
+                    "li" -> {
+                        flush(items)
+                        stack.removeLast()
+                        stack.last().handleToken(input, stack, out)
+                    }
+
+                    else -> TOKEN_UNHANDLED
+                }
+            }
 
             is HtmlToken.Text -> {
                 spans.add(
                     InlineSpan(text = input.content)
                 )
-                true
+                TOKEN_HANDLED
             }
 
             is HtmlToken.TagClose -> {
@@ -468,7 +482,7 @@ class ListItemContext(
                     "li" -> {
                         flush(items)
                         stack.removeLast()
-                        true
+                        TOKEN_HANDLED
                     }
 
                     else -> {
@@ -478,8 +492,6 @@ class ListItemContext(
                     }
                 }
             }
-
-            else -> true
         }
     }
 
