@@ -1411,4 +1411,149 @@ class ASTBuilderTest {
             assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
         }
     }
+
+    private data class BlockquoteTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedBlocks: List<ArticleBlock>
+    )
+
+    @Test
+    fun `blockquote table tests`() {
+        val pos = SourcePosition(1, 1)
+
+        val testCases = listOf(
+            // 1. Simple blockquote
+            BlockquoteTestCase(
+                name = "simple blockquote with text",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.Text(content = "Simplicity is prerequisite for reliability.", position = pos),
+                    HtmlToken.TagClose(name = "blockquote", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Blockquote(
+                        spans = listOf(InlineSpan(text = "Simplicity is prerequisite for reliability."))
+                    )
+                )
+            ),
+
+            // 2. Blockquote with inline styles
+            BlockquoteTestCase(
+                name = "blockquote with inline styles and links",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.Text(content = "Chef's Tip: ", position = pos),
+                    HtmlToken.TagOpen(name = "b", position = pos),
+                    HtmlToken.Text(content = "Do not", position = pos),
+                    HtmlToken.TagClose(name = "b", position = pos),
+                    HtmlToken.Text(content = " overmix the batter! Visit ", position = pos),
+                    HtmlToken.TagOpen(name = "a", attributes = mapOf("href" to "https://recipes.com"), position = pos),
+                    HtmlToken.Text(content = "Recipe Site", position = pos),
+                    HtmlToken.TagClose(name = "a", position = pos),
+                    HtmlToken.TagClose(name = "blockquote", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Blockquote(
+                        spans = listOf(
+                            InlineSpan(text = "Chef's Tip: "),
+                            InlineSpan(text = "Do not", styles = setOf(InlineStyle.BOLD)),
+                            InlineSpan(text = " overmix the batter! Visit "),
+                            InlineSpan(text = "Recipe Site", linkUrl = "https://recipes.com")
+                        )
+                    )
+                )
+            ),
+
+            // 3. Blockquote wrapping paragraph tags
+            BlockquoteTestCase(
+                name = "blockquote wrapping paragraph tags",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Wrapped quote text", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos),
+                    HtmlToken.TagClose(name = "blockquote", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Blockquote(
+                        spans = listOf(InlineSpan(text = "Wrapped quote text"))
+                    )
+                )
+            ),
+
+            // 4. Empty blockquote is discarded
+            BlockquoteTestCase(
+                name = "empty blockquote is discarded",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.TagClose(name = "blockquote", position = pos)
+                ),
+                expectedBlocks = emptyList()
+            ),
+
+            // 5. Whitespace-only blockquote is discarded
+            BlockquoteTestCase(
+                name = "whitespace-only blockquote is discarded",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.Text(content = "   \n\t  ", position = pos),
+                    HtmlToken.TagClose(name = "blockquote", position = pos)
+                ),
+                expectedBlocks = emptyList()
+            ),
+
+            // 6. Unclosed blockquote at EOF
+            BlockquoteTestCase(
+                name = "unclosed blockquote flushes at EOF",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.Text(content = "Quote at end of file", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Blockquote(
+                        spans = listOf(InlineSpan(text = "Quote at end of file"))
+                    )
+                )
+            ),
+
+            // 7. Blockquote inside list item children
+            BlockquoteTestCase(
+                name = "blockquote nested inside list item",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Step 1", position = pos),
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.Text(content = "Important note for step 1", position = pos),
+                    HtmlToken.TagClose(name = "blockquote", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Step 1")),
+                                index = 1,
+                                children = listOf(
+                                    ArticleBlock.Blockquote(
+                                        spans = listOf(InlineSpan(text = "Important note for step 1"))
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val builder = AstBuilder()
+        for ((name, tokens, expectedBlocks) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
+            assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
+        }
+    }
 }

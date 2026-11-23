@@ -80,6 +80,11 @@ class RootContext : BuilderContext {
                         TokenResult.HANDLED
                     }
 
+                    "blockquote" -> {
+                        stack.addLast(BlockquoteContext())
+                        TokenResult.HANDLED
+                    }
+
                     in HtmlTags.HEADINGS -> {
                         val headingLevel = input.name.drop(1).toInt()
                         stack.addLast(HeadingContext(headingLevel))
@@ -217,6 +222,155 @@ class ParagraphContext : BuilderContext {
                     "br" -> {
                         flush(out)
                         out.add(ArticleBlock.LineBreak)
+                        TokenResult.HANDLED
+                    }
+
+                    "b", "strong" -> {
+                        activeStyles.add(input.name)
+                        TokenResult.HANDLED
+                    }
+
+                    "i", "em" -> {
+                        activeStyles.add(input.name)
+                        TokenResult.HANDLED
+                    }
+
+                    "code" -> {
+                        activeStyles.add(input.name)
+                        TokenResult.HANDLED
+                    }
+
+                    "mark" -> {
+                        activeStyles.add(input.name)
+                        TokenResult.HANDLED
+                    }
+
+                    "a" -> {
+                        link = input.attributes["href"]
+                        TokenResult.HANDLED
+                    }
+
+                    else -> {
+                        flush(out)
+                        stack.removeLast()
+                        stack.last().handleToken(input, stack, out)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onEof(out: MutableList<ArticleBlock>) {
+        flush(out)
+    }
+}
+
+class BlockquoteContext(private val targetOut: MutableList<ArticleBlock>? = null) : BuilderContext {
+    private val spans = mutableListOf<InlineSpan>()
+    private val activeStyles = ArrayDeque<String>()
+    private var link: String? = null
+
+    private fun flush(out: MutableList<ArticleBlock>) {
+        val destination = targetOut ?: out
+        if (spans.any { it.text.isNotBlank() }) {
+            destination.add(ArticleBlock.Blockquote(spans.toList()))
+            spans.clear()
+        }
+        activeStyles.clear()
+        link = null
+    }
+
+    override fun handleToken(
+        input: HtmlToken,
+        stack: ArrayDeque<BuilderContext>,
+        out: MutableList<ArticleBlock>
+    ): TokenResult {
+        return when (input) {
+            is HtmlToken.Text -> {
+                val inlineStyle = mutableSetOf<InlineStyle>()
+                for (style in activeStyles) {
+                    when (style) {
+                        "b", "strong" -> inlineStyle.add(InlineStyle.BOLD)
+                        "i", "em" -> inlineStyle.add(InlineStyle.ITALIC)
+                        "code" -> inlineStyle.add(InlineStyle.CODE)
+                        "mark" -> inlineStyle.add(InlineStyle.HIGHLIGHT)
+                        else -> Unit
+                    }
+                }
+                spans.add(
+                    InlineSpan(
+                        text = input.content,
+                        styles = inlineStyle,
+                        linkUrl = link
+                    )
+                )
+                TokenResult.HANDLED
+            }
+
+            is HtmlToken.TagClose -> {
+                when (input.name) {
+                    "blockquote" -> {
+                        flush(out)
+                        stack.removeLast()
+                        TokenResult.HANDLED
+                    }
+
+                    "p" -> TokenResult.SKIPPED
+
+                    "b" -> {
+                        activeStyles.remove("b")
+                        TokenResult.HANDLED
+                    }
+
+                    "strong" -> {
+                        activeStyles.remove("strong")
+                        TokenResult.HANDLED
+                    }
+
+                    "i" -> {
+                        activeStyles.remove("i")
+                        TokenResult.HANDLED
+                    }
+
+                    "em" -> {
+                        activeStyles.remove("em")
+                        TokenResult.HANDLED
+                    }
+
+                    "code" -> {
+                        activeStyles.remove("code")
+                        TokenResult.HANDLED
+                    }
+
+                    "mark" -> {
+                        activeStyles.remove("mark")
+                        TokenResult.HANDLED
+                    }
+
+                    "a" -> {
+                        link = null
+                        TokenResult.HANDLED
+                    }
+
+                    else -> TokenResult.UNHANDLED
+                }
+            }
+
+            is HtmlToken.TagOpen -> {
+                when (input.name) {
+                    "p" -> TokenResult.SKIPPED
+
+                    "hr" -> {
+                        flush(out)
+                        val destination = targetOut ?: out
+                        destination.add(ArticleBlock.Divider)
+                        TokenResult.HANDLED
+                    }
+
+                    "br" -> {
+                        flush(out)
+                        val destination = targetOut ?: out
+                        destination.add(ArticleBlock.LineBreak)
                         TokenResult.HANDLED
                     }
 
@@ -537,6 +691,11 @@ class ListItemContext(
                     "ol", "ul" -> {
                         val isOrdered = input.name == "ol"
                         stack.addLast(ListContext(isOrdered, targetOut = listItemBlocks))
+                        TokenResult.HANDLED
+                    }
+
+                    "blockquote" -> {
+                        stack.addLast(BlockquoteContext(targetOut = listItemBlocks))
                         TokenResult.HANDLED
                     }
 
