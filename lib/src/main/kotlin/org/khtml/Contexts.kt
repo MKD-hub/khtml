@@ -21,12 +21,26 @@ enum class InlineStyle {
     BOLD, ITALIC, CODE, HIGHLIGHT
 }
 
+internal fun HtmlToken.describe(): String = when (this) {
+    is HtmlToken.TagOpen -> "<$name>"
+    is HtmlToken.TagClose -> "</$name>"
+    is HtmlToken.Text -> "text: \"${content.take(30)}${if (content.length > 30) "..." else ""}\""
+}
+
 interface BuilderContext {
+    val scope: String get() = this::class.simpleName?.removeSuffix("Context")?.lowercase() ?: "root"
+
     fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger? = null
     ): TokenResult
+
+    fun logUnhandled(logger: AstLogger?, input: HtmlToken): TokenResult {
+        logger?.log(scope, "UNHANDLED: ${input.describe()}")
+        return TokenResult.UNHANDLED
+    }
 
     fun onEof(out: MutableList<ArticleBlock>) {}
 }
@@ -35,14 +49,15 @@ class RootContext : BuilderContext {
     override fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger?
     ): TokenResult {
         return when (input) {
             is HtmlToken.TagOpen -> {
                 if (input.name in HtmlTags.INLINE) {
                     val p = ParagraphContext()
                     stack.addLast(p)
-                    p.handleToken(input, stack, out)
+                    p.handleToken(input, stack, out, logger)
                 }
                 when (input.name) {
                     "p" -> {
@@ -100,7 +115,7 @@ class RootContext : BuilderContext {
                         TokenResult.HANDLED
                     }
 
-                    else -> TokenResult.UNHANDLED
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -110,10 +125,10 @@ class RootContext : BuilderContext {
                 }
                 val p = ParagraphContext()
                 stack.addLast(p)
-                p.handleToken(input, stack, out) // returns its own TokenResult.HANDLED/UNHANDLED
+                p.handleToken(input, stack, out, logger) // returns its own TokenResult.HANDLED/UNHANDLED
             }
 
-            else -> TokenResult.UNHANDLED
+            else -> logUnhandled(logger, input)
         }
     }
 }
@@ -135,7 +150,8 @@ class ParagraphContext : BuilderContext {
     override fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger?
     ): TokenResult {
         return when (input) {
 
@@ -218,7 +234,7 @@ class ParagraphContext : BuilderContext {
 
                     "img" -> TokenResult.SKIPPED
 
-                    else -> TokenResult.UNHANDLED
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -272,7 +288,7 @@ class ParagraphContext : BuilderContext {
                     else -> {
                         flush(out)
                         stack.removeLast()
-                        stack.last().handleToken(input, stack, out)
+                        stack.last().handleToken(input, stack, out, logger)
                     }
                 }
             }
@@ -302,7 +318,8 @@ class BlockquoteContext(private val targetOut: MutableList<ArticleBlock>? = null
     override fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger?
     ): TokenResult {
         return when (input) {
             is HtmlToken.Text -> {
@@ -373,7 +390,7 @@ class BlockquoteContext(private val targetOut: MutableList<ArticleBlock>? = null
 
                     "img" -> TokenResult.SKIPPED
 
-                    else -> TokenResult.UNHANDLED
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -423,7 +440,7 @@ class BlockquoteContext(private val targetOut: MutableList<ArticleBlock>? = null
                     else -> {
                         flush(out)
                         stack.removeLast()
-                        stack.last().handleToken(input, stack, out)
+                        stack.last().handleToken(input, stack, out, logger)
                     }
                 }
             }
@@ -452,7 +469,8 @@ class HeadingContext(val level: Int) : BuilderContext {
     override fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger?
     ): TokenResult {
         return when (input) {
 
@@ -535,7 +553,7 @@ class HeadingContext(val level: Int) : BuilderContext {
 
                     "img" -> TokenResult.SKIPPED
 
-                    else -> TokenResult.UNHANDLED
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -569,7 +587,7 @@ class HeadingContext(val level: Int) : BuilderContext {
                     else -> {
                         flush(out)
                         stack.removeLast()
-                        stack.last().handleToken(input, stack, out)
+                        stack.last().handleToken(input, stack, out, logger)
                     }
                 }
             }
@@ -595,7 +613,8 @@ class ListContext(val isOrdered: Boolean, val targetOut: MutableList<ArticleBloc
     override fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger?
     ): TokenResult {
         return when (input) {
             is HtmlToken.Text -> {
@@ -604,7 +623,7 @@ class ListContext(val isOrdered: Boolean, val targetOut: MutableList<ArticleBloc
                 } else {
                     val l = ListItemContext(listItems, ++index)
                     stack.addLast(l)
-                    l.handleToken(input, stack, out)
+                    l.handleToken(input, stack, out, logger)
                 }
             }
 
@@ -616,7 +635,7 @@ class ListContext(val isOrdered: Boolean, val targetOut: MutableList<ArticleBloc
                         TokenResult.HANDLED
                     }
 
-                    else -> TokenResult.UNHANDLED
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -628,12 +647,7 @@ class ListContext(val isOrdered: Boolean, val targetOut: MutableList<ArticleBloc
                         TokenResult.HANDLED
                     }
 
-                    else -> TokenResult.UNHANDLED
-                    // else -> {
-                    //     flush(out)
-                    //     stack.removeLast()
-                    //     stack.last().handleToken(input, stack, out)
-                    // }
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -670,7 +684,8 @@ class ListItemContext(
     override fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger?
     ): TokenResult {
         return when (input) {
             is HtmlToken.TagOpen -> {
@@ -679,7 +694,7 @@ class ListItemContext(
                     "li" -> {
                         flush(items)
                         stack.removeLast()
-                        stack.last().handleToken(input, stack, out)
+                        stack.last().handleToken(input, stack, out, logger)
                     }
 
                     "p" -> {
@@ -745,7 +760,7 @@ class ListItemContext(
                         TokenResult.SKIPPED
                     }
 
-                    else -> TokenResult.UNHANDLED
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -834,7 +849,7 @@ class ListItemContext(
                     else -> {
                         flush(items)
                         stack.removeLast()
-                        stack.last().handleToken(input, stack, out)
+                        stack.last().handleToken(input, stack, out, logger)
                     }
                 }
             }
@@ -861,7 +876,8 @@ class CodeblockContext(val openedBy: String, val targetOut: MutableList<ArticleB
     override fun handleToken(
         input: HtmlToken,
         stack: ArrayDeque<BuilderContext>,
-        out: MutableList<ArticleBlock>
+        out: MutableList<ArticleBlock>,
+        logger: AstLogger?
     ): TokenResult {
         return when (input) {
             is HtmlToken.Text -> {
@@ -887,7 +903,9 @@ class CodeblockContext(val openedBy: String, val targetOut: MutableList<ArticleB
                         TokenResult.HANDLED
                     }
 
-                    else -> TokenResult.UNHANDLED
+                    "span" -> TokenResult.HANDLED
+
+                    else -> logUnhandled(logger, input)
                 }
             }
 
@@ -899,7 +917,9 @@ class CodeblockContext(val openedBy: String, val targetOut: MutableList<ArticleB
                         TokenResult.HANDLED
                     }
 
-                    else -> TokenResult.UNHANDLED
+                    "code", "span" -> TokenResult.HANDLED
+
+                    else -> logUnhandled(logger, input)
                 }
             }
         }

@@ -29,8 +29,10 @@ fun main() {
     val tokenizer = Tokenizer()
     val tokens = tokenizer.tokenize(html)
 
-    // 2. Build Article AST
-    val builder = AstBuilder()
+    // 2. Build Article AST (optionally inject logger for unhandled tokens)
+    val builder = AstBuilder(logger = { scope, message ->
+        println("[$scope] $message")
+    })
     val blocks = builder.build(tokens)
 
     println(blocks)

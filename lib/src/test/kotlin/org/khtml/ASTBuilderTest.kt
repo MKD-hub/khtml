@@ -1900,4 +1900,36 @@ class ASTBuilderTest {
             assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
         }
     }
+
+    @Test
+    fun `logger records unhandled tags across scopes`() {
+        val pos = SourcePosition(1, 1)
+        val logs = mutableListOf<String>()
+        val logger = AstLogger { scope, message ->
+            logs.add("[$scope] $message")
+        }
+
+        val tokens = listOf(
+            // 1. Unhandled tag at root: <marquee>
+            HtmlToken.TagOpen(name = "marquee", position = pos),
+            // 2. A normal paragraph with an unhandled closing tag: <p>Hello</unknown></p>
+            HtmlToken.TagOpen(name = "p", position = pos),
+            HtmlToken.Text(content = "Hello", position = pos),
+            HtmlToken.TagClose(name = "unknown", position = pos),
+            HtmlToken.TagClose(name = "p", position = pos),
+            // 3. Unhandled tag at root: </blink>
+            HtmlToken.TagClose(name = "blink", position = pos)
+        )
+
+        val builder = AstBuilder(logger = logger)
+        val blocks = builder.build(tokens)
+
+        assertEquals(1, blocks.size)
+        assertEquals(listOf(ArticleBlock.Paragraph(listOf(InlineSpan("Hello")))), blocks)
+
+        assertEquals(3, logs.size)
+        assertEquals("[root] UNHANDLED: <marquee>", logs[0])
+        assertEquals("[paragraph] UNHANDLED: </unknown>", logs[1])
+        assertEquals("[root] UNHANDLED: </blink>", logs[2])
+    }
 }

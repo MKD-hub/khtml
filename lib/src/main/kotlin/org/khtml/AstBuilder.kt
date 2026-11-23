@@ -1,6 +1,12 @@
 package org.khtml
 
-class AstBuilder {
+fun interface AstLogger {
+    fun log(scope: String, message: String)
+}
+
+class AstBuilder(
+    private val logger: AstLogger? = null
+) {
     fun build(tokens: List<HtmlToken>): List<ArticleBlock> {
 
         val blocks = mutableListOf<ArticleBlock>()
@@ -13,7 +19,7 @@ class AstBuilder {
         }
 
         for (token in tokens) {
-            stack.last().handleToken(token, stack, blocks)
+            stack.last().handleToken(token, stack, blocks, logger)
         }
 
         while (stack.isNotEmpty()) {
