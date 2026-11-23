@@ -1401,6 +1401,27 @@ class ASTBuilderTest {
                         )
                     )
                 )
+            ),
+
+            // 8. <br> inside paragraph emits newline span within same paragraph
+            VoidTagTestCase(
+                name = "br inside paragraph emits newline span within same paragraph",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Line 1", position = pos),
+                    HtmlToken.TagOpen(name = "br", position = pos),
+                    HtmlToken.Text(content = "Line 2", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(
+                        spans = listOf(
+                            InlineSpan(text = "Line 1"),
+                            InlineSpan(text = "\n"),
+                            InlineSpan(text = "Line 2")
+                        )
+                    )
+                )
             )
         )
 
@@ -1543,6 +1564,27 @@ class ASTBuilderTest {
                                     )
                                 )
                             )
+                        )
+                    )
+                )
+            ),
+
+            // 8. <br> inside blockquote emits newline span within same blockquote
+            BlockquoteTestCase(
+                name = "br inside blockquote emits newline span within same blockquote",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "blockquote", position = pos),
+                    HtmlToken.Text(content = "Verse 1", position = pos),
+                    HtmlToken.TagOpen(name = "br", position = pos),
+                    HtmlToken.Text(content = "Verse 2", position = pos),
+                    HtmlToken.TagClose(name = "blockquote", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Blockquote(
+                        spans = listOf(
+                            InlineSpan(text = "Verse 1"),
+                            InlineSpan(text = "\n"),
+                            InlineSpan(text = "Verse 2")
                         )
                     )
                 )

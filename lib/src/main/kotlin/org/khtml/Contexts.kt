@@ -247,8 +247,7 @@ class ParagraphContext : BuilderContext {
                     }
 
                     "br" -> {
-                        flush(out)
-                        out.add(ArticleBlock.LineBreak)
+                        spans.add(InlineSpan(text = "\n"))
                         TokenResult.HANDLED
                     }
 
@@ -406,9 +405,7 @@ class BlockquoteContext(private val targetOut: MutableList<ArticleBlock>? = null
                     }
 
                     "br" -> {
-                        flush(out)
-                        val destination = targetOut ?: out
-                        destination.add(ArticleBlock.LineBreak)
+                        spans.add(InlineSpan(text = "\n"))
                         TokenResult.HANDLED
                     }
 
