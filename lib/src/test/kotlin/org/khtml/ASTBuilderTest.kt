@@ -1556,4 +1556,206 @@ class ASTBuilderTest {
             assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
         }
     }
+
+    data class CodeBlockTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedBlocks: List<ArticleBlock>
+    )
+
+    @Test
+    fun `build code block test cases`() {
+        val pos = SourcePosition(1, 1)
+        val testCases = listOf(
+            // 1. Standalone <pre>
+            CodeBlockTestCase(
+                name = "standalone pre without code tag",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.Text(content = "val x = 1\nval y = 2", position = pos),
+                    HtmlToken.TagClose(name = "pre", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.CodeBlock(
+                        code = "val x = 1\nval y = 2",
+                        language = null
+                    )
+                )
+            ),
+
+            // 2. <pre><code> without language
+            CodeBlockTestCase(
+                name = "pre with code tag without language",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.TagOpen(name = "code", position = pos),
+                    HtmlToken.Text(content = "echo hello", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.TagClose(name = "pre", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.CodeBlock(
+                        code = "echo hello",
+                        language = null
+                    )
+                )
+            ),
+
+            // 3. <pre><code class="language-kotlin">
+            CodeBlockTestCase(
+                name = "pre with language- prefix",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "code",
+                        attributes = mapOf("class" to "language-kotlin"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "fun main() {\n    println(\"hi\")\n}", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.TagClose(name = "pre", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.CodeBlock(
+                        code = "fun main() {\n    println(\"hi\")\n}",
+                        language = "kotlin"
+                    )
+                )
+            ),
+
+            // 4. <pre><code class="lang-python">
+            CodeBlockTestCase(
+                name = "pre with lang- prefix",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "code",
+                        attributes = mapOf("class" to "lang-python"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "print(\"hello\")", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.TagClose(name = "pre", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.CodeBlock(
+                        code = "print(\"hello\")",
+                        language = "python"
+                    )
+                )
+            ),
+
+            // 5. Preserving exact spaces, tabs, and indentation
+            CodeBlockTestCase(
+                name = "preserve indentation and formatting",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.TagOpen(name = "code", position = pos),
+                    HtmlToken.Text(content = "    indented line\n\t\ttabbed line", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.TagClose(name = "pre", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.CodeBlock(
+                        code = "    indented line\n\t\ttabbed line",
+                        language = null
+                    )
+                )
+            ),
+
+            // 6. Absorbs inner tags (such as syntax highlighting spans)
+            CodeBlockTestCase(
+                name = "absorbs syntax highlighting inner tags",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "code",
+                        attributes = mapOf("class" to "language-js"),
+                        position = pos
+                    ),
+                    HtmlToken.TagOpen(
+                        name = "span",
+                        attributes = mapOf("class" to "token-keyword"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "const", position = pos),
+                    HtmlToken.TagClose(name = "span", position = pos),
+                    HtmlToken.Text(content = " x = 1;", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.TagClose(name = "pre", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.CodeBlock(
+                        code = "const x = 1;",
+                        language = "js"
+                    )
+                )
+            ),
+
+            // 7. Unclosed pre tag flushes at EOF
+            CodeBlockTestCase(
+                name = "unclosed pre tag flushes at EOF",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "code",
+                        attributes = mapOf("class" to "language-rust"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "fn main() {", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.CodeBlock(
+                        code = "fn main() {",
+                        language = "rust"
+                    )
+                )
+            ),
+
+            // 8. Code block nested inside list item
+            CodeBlockTestCase(
+                name = "code block nested inside list item",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Installation:", position = pos),
+                    HtmlToken.TagOpen(name = "pre", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "code",
+                        attributes = mapOf("class" to "language-bash"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "npm install khtml", position = pos),
+                    HtmlToken.TagClose(name = "code", position = pos),
+                    HtmlToken.TagClose(name = "pre", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Installation:")),
+                                index = 1,
+                                children = listOf(
+                                    ArticleBlock.CodeBlock(
+                                        code = "npm install khtml",
+                                        language = "bash"
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val builder = AstBuilder()
+        for ((name, tokens, expectedBlocks) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
+            assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
+        }
+    }
 }

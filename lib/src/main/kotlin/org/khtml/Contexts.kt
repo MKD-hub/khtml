@@ -85,6 +85,12 @@ class RootContext : BuilderContext {
                         TokenResult.HANDLED
                     }
 
+                    "pre" -> {
+                        val openedBy = input.name
+                        stack.addLast(CodeblockContext(openedBy))
+                        TokenResult.HANDLED
+                    }
+
                     in HtmlTags.HEADINGS -> {
                         val headingLevel = input.name.drop(1).toInt()
                         stack.addLast(HeadingContext(headingLevel))
@@ -660,6 +666,8 @@ class ListItemContext(
                     }
 
                     "p" -> {
+                        // we just want the text from the paragraph, we'll―
+                        // treat is as a standard list item
                         TokenResult.SKIPPED
                     }
 
@@ -696,6 +704,12 @@ class ListItemContext(
 
                     "blockquote" -> {
                         stack.addLast(BlockquoteContext(targetOut = listItemBlocks))
+                        TokenResult.HANDLED
+                    }
+
+                    "pre" -> {
+                        val openedBy = input.name
+                        stack.addLast(CodeblockContext(openedBy, targetOut = listItemBlocks))
                         TokenResult.HANDLED
                     }
 
@@ -803,5 +817,71 @@ class ListItemContext(
 
     override fun onEof(out: MutableList<ArticleBlock>) {
         flush(items)
+    }
+}
+
+class CodeblockContext(val openedBy: String, val targetOut: MutableList<ArticleBlock>? = null) : BuilderContext {
+    private val codeBuilder = StringBuilder()
+    private var language: String? = null
+
+    private fun flush(out: MutableList<ArticleBlock>) {
+        val destination = targetOut ?: out
+        if (codeBuilder.isNotEmpty()) {
+            destination.add(ArticleBlock.CodeBlock(code = codeBuilder.toString(), language = language))
+        }
+        language = null
+    }
+
+    override fun handleToken(
+        input: HtmlToken,
+        stack: ArrayDeque<BuilderContext>,
+        out: MutableList<ArticleBlock>
+    ): TokenResult {
+        return when (input) {
+            is HtmlToken.Text -> {
+                codeBuilder.append(input.content)
+                TokenResult.HANDLED
+            }
+
+            is HtmlToken.TagOpen -> {
+                when (input.name) {
+                    "code" -> {
+
+                        val rawClass = input.attributes["class"] ?: ""
+                        language = rawClass
+                            .split("\\s+".toRegex())
+                            .firstNotNullOfOrNull { cls ->
+                                when {
+                                    cls.startsWith("language-") -> cls.removePrefix("language-")
+                                    cls.startsWith("lang-") -> cls.removePrefix("lang-")
+                                    else -> null
+                                }
+                            }
+
+                        TokenResult.HANDLED
+                    }
+
+                    else -> TokenResult.UNHANDLED
+                }
+            }
+
+            is HtmlToken.TagClose -> {
+                when (input.name) {
+                    openedBy -> {
+                        flush(out)
+                        stack.removeLast()
+                        TokenResult.HANDLED
+                    }
+
+                    else -> TokenResult.UNHANDLED
+                }
+            }
+
+            else -> TokenResult.UNHANDLED
+        }
+    }
+
+    override fun onEof(out: MutableList<ArticleBlock>) {
+        flush(out)
     }
 }
