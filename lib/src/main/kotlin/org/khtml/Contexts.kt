@@ -12,10 +12,6 @@ internal object HtmlTags {
         "kbd", "samp", "mark", "span", "cite", "dfn"
     )
 
-    val VOID = setOf(
-        "br", "hr", "img", "meta", "link"
-    )
-
     val HEADINGS = setOf(
         "h1", "h2", "h3", "h4", "h5", "h6"
     )
@@ -88,6 +84,13 @@ class RootContext : BuilderContext {
                     "pre" -> {
                         val openedBy = input.name
                         stack.addLast(CodeblockContext(openedBy))
+                        TokenResult.HANDLED
+                    }
+
+                    "img" -> {
+                        val src = input.attributes["src"] ?: ""
+                        val alt = input.attributes["alt"]
+                        out.add(ArticleBlock.ImageBlock(src = src, alt = alt))
                         TokenResult.HANDLED
                     }
 
@@ -213,6 +216,8 @@ class ParagraphContext : BuilderContext {
                         TokenResult.HANDLED
                     }
 
+                    "img" -> TokenResult.SKIPPED
+
                     else -> TokenResult.UNHANDLED
                 }
             }
@@ -228,6 +233,14 @@ class ParagraphContext : BuilderContext {
                     "br" -> {
                         flush(out)
                         out.add(ArticleBlock.LineBreak)
+                        TokenResult.HANDLED
+                    }
+
+                    "img" -> {
+                        flush(out)
+                        val src = input.attributes["src"] ?: ""
+                        val alt = input.attributes["alt"]
+                        out.add(ArticleBlock.ImageBlock(src = src, alt = alt))
                         TokenResult.HANDLED
                     }
 
@@ -357,6 +370,8 @@ class BlockquoteContext(private val targetOut: MutableList<ArticleBlock>? = null
                         link = null
                         TokenResult.HANDLED
                     }
+
+                    "img" -> TokenResult.SKIPPED
 
                     else -> TokenResult.UNHANDLED
                 }
@@ -517,6 +532,8 @@ class HeadingContext(val level: Int) : BuilderContext {
                         link = null
                         TokenResult.HANDLED
                     }
+
+                    "img" -> TokenResult.SKIPPED
 
                     else -> TokenResult.UNHANDLED
                 }
@@ -713,6 +730,13 @@ class ListItemContext(
                         TokenResult.HANDLED
                     }
 
+                    "img" -> {
+                        val src = input.attributes["src"] ?: ""
+                        val alt = input.attributes["alt"]
+                        listItemBlocks.add(ArticleBlock.ImageBlock(src = src, alt = alt))
+                        TokenResult.HANDLED
+                    }
+
                     "hr", "br" -> {
                         // personal opinion:
                         // line breaks and horizontal rules in lists
@@ -805,6 +829,8 @@ class ListItemContext(
                         TokenResult.HANDLED
                     }
 
+                    "img" -> TokenResult.SKIPPED
+
                     else -> {
                         flush(items)
                         stack.removeLast()
@@ -876,8 +902,6 @@ class CodeblockContext(val openedBy: String, val targetOut: MutableList<ArticleB
                     else -> TokenResult.UNHANDLED
                 }
             }
-
-            else -> TokenResult.UNHANDLED
         }
     }
 

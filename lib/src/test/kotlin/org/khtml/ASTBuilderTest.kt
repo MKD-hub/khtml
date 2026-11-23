@@ -1758,4 +1758,146 @@ class ASTBuilderTest {
             assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
         }
     }
+
+    data class ImageBlockTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedBlocks: List<ArticleBlock>
+    )
+
+    @Test
+    fun `build image block test cases`() {
+        val pos = SourcePosition(1, 1)
+        val testCases = listOf(
+            // 1. Standalone <img> with src and alt
+            ImageBlockTestCase(
+                name = "standalone img with src and alt",
+                tokens = listOf(
+                    HtmlToken.TagOpen(
+                        name = "img",
+                        attributes = mapOf("src" to "https://example.com/cat.png", "alt" to "A cute cat"),
+                        position = pos
+                    )
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.ImageBlock(
+                        src = "https://example.com/cat.png",
+                        alt = "A cute cat"
+                    )
+                )
+            ),
+
+            // 2. Standalone <img> with only src
+            ImageBlockTestCase(
+                name = "standalone img with only src",
+                tokens = listOf(
+                    HtmlToken.TagOpen(
+                        name = "img",
+                        attributes = mapOf("src" to "/images/banner.jpg"),
+                        position = pos
+                    )
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.ImageBlock(
+                        src = "/images/banner.jpg",
+                        alt = null
+                    )
+                )
+            ),
+
+            // 3. <img> followed by optional closing tag </img>
+            ImageBlockTestCase(
+                name = "img with explicit closing tag is absorbed",
+                tokens = listOf(
+                    HtmlToken.TagOpen(
+                        name = "img",
+                        attributes = mapOf("src" to "logo.svg", "alt" to "Logo"),
+                        position = pos
+                    ),
+                    HtmlToken.TagClose(name = "img", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.ImageBlock(
+                        src = "logo.svg",
+                        alt = "Logo"
+                    )
+                )
+            ),
+
+            // 4. <img> inside paragraph splits paragraph into before and after
+            ImageBlockTestCase(
+                name = "img inside paragraph splits paragraph",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Before image", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "img",
+                        attributes = mapOf("src" to "inline.jpg", "alt" to "Diagram"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "After image", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "Before image"))),
+                    ArticleBlock.ImageBlock(src = "inline.jpg", alt = "Diagram"),
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "After image")))
+                )
+            ),
+
+            // 5. <img> nested inside list item
+            ImageBlockTestCase(
+                name = "img nested inside list item",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Recipe step:", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "img",
+                        attributes = mapOf("src" to "step1.jpg", "alt" to "Chop onions"),
+                        position = pos
+                    ),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(
+                                spans = listOf(InlineSpan(text = "Recipe step:")),
+                                index = 1,
+                                children = listOf(
+                                    ArticleBlock.ImageBlock(
+                                        src = "step1.jpg",
+                                        alt = "Chop onions"
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            ),
+
+            // 6. Multiple consecutive images at root
+            ImageBlockTestCase(
+                name = "multiple consecutive images at root",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "img", attributes = mapOf("src" to "1.png"), position = pos),
+                    HtmlToken.TagOpen(name = "img", attributes = mapOf("src" to "2.png"), position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.ImageBlock(src = "1.png", alt = null),
+                    ArticleBlock.ImageBlock(src = "2.png", alt = null)
+                )
+            )
+        )
+
+        val builder = AstBuilder()
+        for ((name, tokens, expectedBlocks) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
+            assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
+        }
+    }
 }

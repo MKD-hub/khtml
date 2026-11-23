@@ -40,20 +40,28 @@ fun main() {
 ## Data Model
 
 ### Article Blocks
-- `ArticleBlock.Paragraph(spans)`
-- `ArticleBlock.Heading(level, text)`
-- `ArticleBlock.Blockquote(spans)`
-- `ArticleBlock.CodeBlock(code, language)`
-- `ArticleBlock.ListItem(spans, isOrdered, index)`
-- `ArticleBlock.ImageBlock(src, alt)`
-- `ArticleBlock.Divider`
+- `ArticleBlock.Paragraph(spans)` - Text paragraphs with inline styling and links.
+- `ArticleBlock.Heading(level, spans, id)` - Headings `h1` through `h6`.
+- `ArticleBlock.Blockquote(spans)` - Quotations and callouts.
+- `ArticleBlock.CodeBlock(code, language)` - Preformatted code blocks (`<pre>`, `<pre><code>`) with extracted language metadata.
+- `ArticleBlock.HtmlList(items, isOrdered)` - Ordered (`<ol>`) and unordered (`<ul>`) lists.
+- `ArticleBlock.ListItem(spans, index, children)` - List items supporting recursive child blocks (nested sub-lists, blockquotes, code blocks, and images).
+- `ArticleBlock.ImageBlock(src, alt)` - Images (`<img>`) with source and alternative text.
+- `ArticleBlock.Divider` - Horizontal rule divider (`<hr>`).
+- `ArticleBlock.LineBreak` - Standalone line break (`<br>`).
 
 ### Inline Spans
-- `InlineSpan.Text(content)`
-- `InlineSpan.Bold(content)`
-- `InlineSpan.Italic(content)`
-- `InlineSpan.Code(content)`
-- `InlineSpan.Link(text, url)`
+- `InlineSpan(text, styles, linkUrl)` - Formatted text runs supporting combined styles:
+  - `InlineStyle.BOLD` (`<b>`, `<strong>`)
+  - `InlineStyle.ITALIC` (`<i>`, `<em>`)
+  - `InlineStyle.CODE` (`<code>`)
+  - `InlineStyle.HIGHLIGHT` (`<mark>`)
+  - Hyperlinks (`<a href="...">`)
+
+## Roadmap & Considerations
+
+- **Tables**: Tables (`<table>`, `<tr>`, `<td>`, `<th>`) are complex to render on mobile screens and are currently under active design for a dedicated upcoming milestone.
+- **Extended Lists**: Custom / non-standard `<list>` tags and description lists (`<dl>`, `<dt>`, `<dd>`) are being considered for future parser revisions.
 
 ## Build and Test
 
