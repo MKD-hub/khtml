@@ -1264,4 +1264,151 @@ class ASTBuilderTest {
             assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
         }
     }
+
+    private data class VoidTagTestCase(
+        val name: String,
+        val tokens: List<HtmlToken>,
+        val expectedBlocks: List<ArticleBlock>
+    )
+
+    @Test
+    fun `void tags - hr and br handling`() {
+        val pos = SourcePosition(1, 1)
+
+        val testCases = listOf(
+            // 1. Standalone <hr> at root emits Divider
+            VoidTagTestCase(
+                name = "standalone hr at root emits Divider",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "hr", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Divider
+                )
+            ),
+
+            // 2. <hr> between paragraphs emits Divider
+            VoidTagTestCase(
+                name = "hr between paragraphs emits Divider",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Before", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "hr", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "After", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "Before"))),
+                    ArticleBlock.Divider,
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "After")))
+                )
+            ),
+
+            // 3. <hr> inside a paragraph forces flush, emits Divider, and starts new paragraph
+            VoidTagTestCase(
+                name = "hr inside paragraph splits paragraph with Divider",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Hello", position = pos),
+                    HtmlToken.TagOpen(name = "hr", position = pos),
+                    HtmlToken.Text(content = "World", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "Hello"))),
+                    ArticleBlock.Divider,
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "World")))
+                )
+            ),
+
+            // 4. <hr> inside list is skipped
+            VoidTagTestCase(
+                name = "hr inside list is skipped",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Item 1", position = pos),
+                    HtmlToken.TagOpen(name = "hr", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Item 2", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(spans = listOf(InlineSpan(text = "Item 1")), index = 1),
+                            ArticleBlock.ListItem(spans = listOf(InlineSpan(text = "Item 2")), index = 2)
+                        )
+                    )
+                )
+            ),
+
+            // 5. Standalone <br> at root emits LineBreak
+            VoidTagTestCase(
+                name = "standalone br at root emits LineBreak",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "br", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.LineBreak
+                )
+            ),
+
+            // 6. <br> between paragraphs emits LineBreak
+            VoidTagTestCase(
+                name = "br between paragraphs emits LineBreak",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Before", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos),
+                    HtmlToken.TagOpen(name = "br", position = pos),
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "After", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "Before"))),
+                    ArticleBlock.LineBreak,
+                    ArticleBlock.Paragraph(spans = listOf(InlineSpan(text = "After")))
+                )
+            ),
+
+            // 7. <br> inside list is skipped
+            VoidTagTestCase(
+                name = "br inside list is skipped",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "ul", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Item 1", position = pos),
+                    HtmlToken.TagOpen(name = "br", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagOpen(name = "li", position = pos),
+                    HtmlToken.Text(content = "Item 2", position = pos),
+                    HtmlToken.TagClose(name = "li", position = pos),
+                    HtmlToken.TagClose(name = "ul", position = pos)
+                ),
+                expectedBlocks = listOf(
+                    ArticleBlock.HtmlList(
+                        isOrdered = false,
+                        items = listOf(
+                            ArticleBlock.ListItem(spans = listOf(InlineSpan(text = "Item 1")), index = 1),
+                            ArticleBlock.ListItem(spans = listOf(InlineSpan(text = "Item 2")), index = 2)
+                        )
+                    )
+                )
+            )
+        )
+
+        val builder = AstBuilder()
+        for ((name, tokens, expectedBlocks) in testCases) {
+            val blocks = builder.build(tokens)
+            assertEquals(expectedBlocks.size, blocks.size, "Failed on '$name': Block count mismatch")
+            assertEquals(expectedBlocks, blocks, "Failed on '$name': Block content mismatch")
+        }
+    }
 }

@@ -9,7 +9,7 @@ enum class TokenResult {
 internal object HtmlTags {
     val INLINE = setOf(
         "b", "strong", "i", "em", "a", "code",
-        "kbd", "samp", "mark", "span", "br", "cite", "dfn"
+        "kbd", "samp", "mark", "span", "cite", "dfn"
     )
 
     val VOID = setOf(
@@ -63,6 +63,20 @@ class RootContext : BuilderContext {
                     "li" -> {
                         val p = ParagraphContext()
                         stack.addLast(p)
+                        TokenResult.HANDLED
+                    }
+
+                    "hr" -> {
+                        out.add(
+                            ArticleBlock.Divider
+                        )
+                        TokenResult.HANDLED
+                    }
+
+                    "br" -> {
+                        out.add(
+                            ArticleBlock.LineBreak
+                        )
                         TokenResult.HANDLED
                     }
 
@@ -194,6 +208,18 @@ class ParagraphContext : BuilderContext {
 
             is HtmlToken.TagOpen -> {
                 when (input.name) {
+                    "hr" -> {
+                        flush(out)
+                        out.add(ArticleBlock.Divider)
+                        TokenResult.HANDLED
+                    }
+
+                    "br" -> {
+                        flush(out)
+                        out.add(ArticleBlock.LineBreak)
+                        TokenResult.HANDLED
+                    }
+
                     "b", "strong" -> {
                         activeStyles.add(input.name)
                         TokenResult.HANDLED
@@ -512,6 +538,14 @@ class ListItemContext(
                         val isOrdered = input.name == "ol"
                         stack.addLast(ListContext(isOrdered, targetOut = listItemBlocks))
                         TokenResult.HANDLED
+                    }
+
+                    "hr", "br" -> {
+                        // personal opinion:
+                        // line breaks and horizontal rules in lists
+                        // have no semantic meaning and add nothing to the lists
+                        // avoid them.
+                        TokenResult.SKIPPED
                     }
 
                     else -> TokenResult.UNHANDLED
