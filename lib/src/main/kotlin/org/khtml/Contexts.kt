@@ -17,8 +17,18 @@ internal object HtmlTags {
     )
 }
 
+/**
+ * Formatting styles that can be applied to an [InlineSpan].
+ */
 enum class InlineStyle {
-    BOLD, ITALIC, CODE, HIGHLIGHT
+    /** Bold text weight (from `<b>`, `<strong>`). */
+    BOLD,
+    /** Italic text slant (from `<i>`, `<em>`). */
+    ITALIC,
+    /** Inline monospace font (from `<code>`, `<kbd>`, `<samp>`). */
+    CODE,
+    /** Highlighted or marked background (from `<mark>`). */
+    HIGHLIGHT
 }
 
 internal fun HtmlToken.describe(): String = when (this) {
@@ -284,6 +294,8 @@ class ParagraphContext : BuilderContext {
                         TokenResult.HANDLED
                     }
 
+                    "span", "cite", "dfn", "kbd", "samp" -> TokenResult.SKIPPED
+
                     else -> {
                         flush(out)
                         stack.removeLast()
@@ -434,6 +446,8 @@ class BlockquoteContext(private val targetOut: MutableList<ArticleBlock>? = null
                         TokenResult.HANDLED
                     }
 
+                    "span", "cite", "dfn", "kbd", "samp" -> TokenResult.SKIPPED
+
                     else -> {
                         flush(out)
                         stack.removeLast()
@@ -580,6 +594,8 @@ class HeadingContext(val level: Int) : BuilderContext {
                         link = input.attributes["href"]
                         TokenResult.HANDLED
                     }
+
+                    "span", "cite", "dfn", "kbd", "samp" -> TokenResult.SKIPPED
 
                     else -> {
                         flush(out)
@@ -900,7 +916,7 @@ class CodeblockContext(val openedBy: String, val targetOut: MutableList<ArticleB
                         TokenResult.HANDLED
                     }
 
-                    "span" -> TokenResult.HANDLED
+                    "span" -> TokenResult.SKIPPED
 
                     else -> logUnhandled(logger, input)
                 }
@@ -914,7 +930,7 @@ class CodeblockContext(val openedBy: String, val targetOut: MutableList<ArticleB
                         TokenResult.HANDLED
                     }
 
-                    "code", "span" -> TokenResult.HANDLED
+                    "code", "span" -> TokenResult.SKIPPED
 
                     else -> logUnhandled(logger, input)
                 }

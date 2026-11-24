@@ -1,5 +1,11 @@
 package org.khtml
 
+/**
+ * Utility for decoding HTML character references into standard Unicode characters.
+ *
+ * Supports named typography entities (e.g. `&rsquo;`, `&mdash;`), standard XML escapes (`&amp;`, `&lt;`),
+ * and numeric code point references in decimal (`&#8217;`) and hex (`&#x2019;`).
+ */
 object HtmlEntities {
     private val NAMED_ENTITIES: Map<String, String> = mapOf(
         // Core HTML
@@ -79,6 +85,15 @@ object HtmlEntities {
         "ntilde" to "ñ", "Ntilde" to "Ñ"
     )
 
+    /**
+     * Decodes all recognized HTML character entities in [input] to Unicode.
+     *
+     * If [input] contains no `&` character, it is returned immediately without allocations.
+     * Unrecognized or malformed entities are preserved verbatim.
+     *
+     * @param input Raw text potentially containing HTML entities.
+     * @return String with all recognized entities replaced.
+     */
     fun decode(input: String): String {
         if (!input.contains('&')) return input
 

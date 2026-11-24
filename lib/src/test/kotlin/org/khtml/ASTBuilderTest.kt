@@ -270,6 +270,27 @@ class ASTBuilderTest {
                         linkUrl = "https://example.com"
                     )
                 )
+            ),
+
+            // 9. Generic inline span tags pass through cleanly without splitting
+            InlineTestCase(
+                name = "generic inline span <span class>",
+                tokens = listOf(
+                    HtmlToken.TagOpen(name = "p", position = pos),
+                    HtmlToken.Text(content = "Text with ", position = pos),
+                    HtmlToken.TagOpen(
+                        name = "span",
+                        attributes = mapOf("class" to "highlight"),
+                        position = pos
+                    ),
+                    HtmlToken.Text(content = "span content", position = pos),
+                    HtmlToken.TagClose(name = "span", position = pos),
+                    HtmlToken.TagClose(name = "p", position = pos)
+                ),
+                expectedSpans = listOf(
+                    InlineSpan(text = "Text with "),
+                    InlineSpan(text = "span content")
+                )
             )
         )
 

@@ -3,26 +3,56 @@
  */
 package org.khtml
 
+/**
+ * Position of a token in the original HTML source text.
+ *
+ * @property line 1-based line number.
+ * @property col 1-based column number.
+ */
 data class SourcePosition(
     val line: Int,
     val col: Int
 )
 
+/**
+ * Represents a lexical token emitted by [Tokenizer].
+ */
 sealed interface HtmlToken {
-    // this is a variable that the class itself owns
+    /** The source location where this token starts. */
     val position: SourcePosition
 
+    /**
+     * An opening HTML tag (e.g. `<p class="intro">`, `<a href="...">`).
+     *
+     * @property name Lowercase tag name (e.g. `p`, `a`, `h1`).
+     * @property attributes Decoded key-value attributes.
+     * @property position Source position of the opening `<`.
+     */
     data class TagOpen(
         val name: String,
         val attributes: Map<String, String> = emptyMap(),
         override val position: SourcePosition
     ) : HtmlToken
 
+    /**
+     * A closing HTML tag (e.g. `</p>`, `</a>`).
+     *
+     * @property name Lowercase tag name.
+     * @property position Source position of the closing `<`.
+     */
     data class TagClose(
         val name: String,
         override val position: SourcePosition
     ) : HtmlToken
 
+    /**
+     * Plain text content outside or between HTML tags.
+     *
+     * HTML character entities (e.g. `&rsquo;`, `&amp;`) are automatically decoded.
+     *
+     * @property content The decoded text content.
+     * @property position Source position where the text begins.
+     */
     data class Text(
         val content: String,
         override val position: SourcePosition
@@ -196,9 +226,24 @@ object TextRule : TokenizerRule {
     }
 }
 
+/**
+ * Fast, lightweight lexical analyzer for HTML content.
+ *
+ * Converts a raw HTML sequence into a stream of [HtmlToken]s without DOM or browser overhead.
+ *
+ * @param rules The ordered set of tokenization rules to apply at each character position.
+ */
 class Tokenizer(
     private val rules: List<TokenizerRule> = DEFAULT_RULES
 ) {
+    /**
+     * Tokenizes the given [htmlSequence] into a list of [HtmlToken]s.
+     *
+     * Unclosed tags or malformed syntax are gracefully preserved and emitted as [HtmlToken.Text].
+     *
+     * @param htmlSequence Raw HTML input string.
+     * @return List of tokens in document order.
+     */
     fun tokenize(htmlSequence: CharSequence): List<HtmlToken> {
         if (htmlSequence.isEmpty()) return emptyList()
 
