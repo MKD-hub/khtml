@@ -145,4 +145,42 @@ class TokenizerTest {
         assertIs<HtmlToken.Text>(text)
         assertEquals("<p unclosed", text.content)
     }
+
+    @Test
+    fun `decode html entities in text content`() {
+        val tok = Tokenizer()
+        val got = tok.tokenize("<p>It&rsquo;s a &ldquo;test&rdquo; &amp; more&hellip;</p>")
+        assertEquals(3, got.size)
+
+        val text = got[1]
+        assertIs<HtmlToken.Text>(text)
+        assertEquals("It’s a “test” & more…", text.content)
+    }
+
+    @Test
+    fun `decode numeric decimal and hex entities`() {
+        val tok = Tokenizer()
+        val got = tok.tokenize("<p>Decimal: &#8217; Hex: &#x2019;</p>")
+        val text = got[1]
+        assertIs<HtmlToken.Text>(text)
+        assertEquals("Decimal: ’ Hex: ’", text.content)
+    }
+
+    @Test
+    fun `decode entities in attributes`() {
+        val tok = Tokenizer()
+        val got = tok.tokenize("""<a href="https://example.com?a=1&amp;b=2">link</a>""")
+        val tag = got[0]
+        assertIs<HtmlToken.TagOpen>(tag)
+        assertEquals("https://example.com?a=1&b=2", tag.attributes["href"])
+    }
+
+    @Test
+    fun `unknown or malformed entities are left intact`() {
+        val tok = Tokenizer()
+        val got = tok.tokenize("<p>Fish & Chips &unknown; & incomplete</p>")
+        val text = got[1]
+        assertIs<HtmlToken.Text>(text)
+        assertEquals("Fish & Chips &unknown; & incomplete", text.content)
+    }
 }

@@ -128,13 +128,13 @@ object TagOpenRule : TokenizerRule {
                         if (i < rawAttrs.length && rawAttrs[i] == quote) {
                             i++
                         }
-                        out[key] = value
+                        out[key] = HtmlEntities.decode(value)
                     } else {
                         val valStart = i
                         while (i < rawAttrs.length && !rawAttrs[i].isWhitespace() && rawAttrs[i] != '>') {
                             i++
                         }
-                        out[key] = rawAttrs.substring(valStart, i)
+                        out[key] = HtmlEntities.decode(rawAttrs.substring(valStart, i))
                     }
                 }
             } else {
@@ -184,7 +184,7 @@ object TextRule : TokenizerRule {
             end++
         }
 
-        val text = input.subSequence(cursor, end).toString()
+        val text = HtmlEntities.decode(input.subSequence(cursor, end).toString())
 
         out.add(
             HtmlToken.Text(
